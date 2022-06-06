@@ -39,9 +39,32 @@ type Info struct {
 	Speed          float32
 }
 
+type Position struct {
+	X float32
+	Y float32
+	Z float32
+}
+
+type Rotation struct {
+	Position
+	W float32
+}
+type PositionAndRotation struct {
+	Position Position
+	Rotation Rotation
+}
+type Frame struct {
+	Time      float32
+	Fps       int32
+	Header    PositionAndRotation
+	LeftHand  PositionAndRotation
+	RightHand PositionAndRotation
+}
+
 type Bsor struct {
 	Header Header
 	Info   Info
+	Frames []Frame
 }
 
 var byteOrder = binary.LittleEndian
@@ -52,9 +75,22 @@ func Read(file os.File, bsor *Bsor) (err error) {
 		return
 	}
 
-	readNextBytes(file, 1)
+	_, err = readNextBytes(file, 1)
+	if err != nil {
+		return
+	}
 
 	err = readInfo(file, &bsor.Info)
+	if err != nil {
+		return
+	}
+
+	_, err = readNextBytes(file, 1)
+	if err != nil {
+		return
+	}
+
+	err = readFrames(file, &bsor.Frames)
 	if err != nil {
 		return
 	}
@@ -204,8 +240,21 @@ func readInfo(file os.File, info *Info) (err error) {
 	return nil
 }
 
-func readAny(file os.File, out any, number int) (err error) {
-	data, err := readNextBytes(file, number)
+func readFrames(file os.File, frames *[]Frame) (err error) {
+	var framesCount uint32
+	err = readUInt32(file, &framesCount)
+	if err != nil {
+		return
+	}
+
+	*frames = make([]Frame, framesCount)
+	readAny(file, frames, binary.Size(*frames))
+
+	return
+}
+
+func readAny(file os.File, out any, byteSize int) (err error) {
+	data, err := readNextBytes(file, byteSize)
 	if err != nil {
 		return
 	}
