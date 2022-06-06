@@ -9,14 +9,14 @@ import (
 )
 
 type Header struct {
-	Magic   int32
+	Magic   uint32
 	Version byte
 }
 
 type Info struct {
 	ModVersion     string
 	GameVersion    string
-	Timestamp      int32
+	Timestamp      uint32
 	PlayerId       string
 	PlayerName     string
 	Platform       string
@@ -27,7 +27,7 @@ type Info struct {
 	SongName       string
 	Mapper         string
 	Difficulty     string
-	Score          int32
+	Score          uint32
 	Mode           string
 	Environment    string
 	Modifiers      string
@@ -59,13 +59,13 @@ type PositionAndRotation struct {
 
 type Frame struct {
 	Time      float32
-	Fps       int32
+	Fps       uint32
 	Header    PositionAndRotation
 	LeftHand  PositionAndRotation
 	RightHand PositionAndRotation
 }
 
-type NoteEventType int32
+type NoteEventType uint32
 
 const (
 	Good NoteEventType = iota
@@ -81,7 +81,7 @@ type NoteCutInfo struct {
 	WasCutTooSoon       bool
 	SaberSpeed          float32
 	SaberDir            Vector3
-	SaberType           int32
+	SaberType           uint32
 	TimeDeviation       float32
 	CutDirDeviation     float32
 	CutPoint            Vector3
@@ -93,11 +93,18 @@ type NoteCutInfo struct {
 }
 
 type Note struct {
-	NoteId    int32
+	NoteId    uint32
 	EventTime float32
 	SpawnTime float32
 	EventType NoteEventType
 	CutInfo   NoteCutInfo
+}
+
+type Wall struct {
+	WallId    uint32
+	Energy    float32
+	Time      float32
+	SpawnTime float32
 }
 
 type Bsor struct {
@@ -105,6 +112,7 @@ type Bsor struct {
 	Info   Info
 	Frames []Frame
 	Notes  []Note
+	Walls  []Wall
 }
 
 var byteOrder = binary.LittleEndian
@@ -141,6 +149,16 @@ func Read(file os.File, bsor *Bsor) (err error) {
 	}
 
 	err = readNotes(file, &bsor.Notes)
+	if err != nil {
+		return
+	}
+
+	_, err = readNextBytes(file, 1)
+	if err != nil {
+		return
+	}
+
+	err = readWalls(file, &bsor.Walls)
 	if err != nil {
 		return
 	}
@@ -185,7 +203,7 @@ func readInfo(file os.File, info *Info) (err error) {
 	if err != nil {
 		return
 	}
-	info.Timestamp = int32(timestampInt)
+	info.Timestamp = uint32(timestampInt)
 
 	err = readString(file, &info.PlayerId)
 	if err != nil {
@@ -335,6 +353,19 @@ func readNotes(file os.File, notes *[]Note) (err error) {
 			}
 		}
 	}
+
+	return
+}
+
+func readWalls(file os.File, walls *[]Wall) (err error) {
+	var wallsCount uint32
+	err = readUInt32(file, &wallsCount)
+	if err != nil {
+		return
+	}
+
+	*walls = make([]Wall, wallsCount)
+	err = readAny(file, walls, binary.Size(*walls))
 
 	return
 }
