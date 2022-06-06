@@ -107,12 +107,18 @@ type Wall struct {
 	SpawnTime float32
 }
 
+type Height struct {
+	Height float32
+	Time   float32
+}
+
 type Bsor struct {
-	Header Header
-	Info   Info
-	Frames []Frame
-	Notes  []Note
-	Walls  []Wall
+	Header  Header
+	Info    Info
+	Frames  []Frame
+	Notes   []Note
+	Walls   []Wall
+	Heights []Height
 }
 
 var byteOrder = binary.LittleEndian
@@ -159,6 +165,16 @@ func Read(file os.File, bsor *Bsor) (err error) {
 	}
 
 	err = readWalls(file, &bsor.Walls)
+	if err != nil {
+		return
+	}
+
+	_, err = readNextBytes(file, 1)
+	if err != nil {
+		return
+	}
+
+	err = readHeights(file, &bsor.Heights)
 	if err != nil {
 		return
 	}
@@ -366,6 +382,19 @@ func readWalls(file os.File, walls *[]Wall) (err error) {
 
 	*walls = make([]Wall, wallsCount)
 	err = readAny(file, walls, binary.Size(*walls))
+
+	return
+}
+
+func readHeights(file os.File, heights *[]Height) (err error) {
+	var heightsCount uint32
+	err = readUInt32(file, &heightsCount)
+	if err != nil {
+		return
+	}
+
+	*heights = make([]Height, heightsCount)
+	err = readAny(file, heights, binary.Size(*heights))
 
 	return
 }
