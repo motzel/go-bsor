@@ -46,22 +46,20 @@ type Bsor struct {
 
 var byteOrder = binary.LittleEndian
 
-func Read(file os.File) (bsor *Bsor, err error) {
-	var out Bsor = Bsor{}
-
-	err = readHeader(file, &out.Header)
+func Read(file os.File, bsor *Bsor) (err error) {
+	err = readHeader(file, &bsor.Header)
 	if err != nil {
-		return nil, err
+		return
 	}
 
 	readNextBytes(file, 1)
 
-	err = readInfo(file, &out.Info)
+	err = readInfo(file, &bsor.Info)
 	if err != nil {
-		return nil, err
+		return
 	}
 
-	return &out, nil
+	return
 }
 
 func readHeader(file os.File, header *Header) (err error) {
