@@ -378,7 +378,7 @@ func readNotes(file os.File, notes *[]Note) (err error) {
 		if err != nil {
 			return
 		}
-		if (*notes)[i].EventType == Good {
+		if (*notes)[i].EventType == Good || (*notes)[i].EventType == Bad {
 			err = readAny(file, &(*notes)[i].CutInfo, binary.Size((*notes)[i].CutInfo))
 			if err != nil {
 				return
