@@ -112,6 +112,11 @@ type Height struct {
 	Time   float32
 }
 
+type Pause struct {
+	Duration uint32
+	Time     float32
+}
+
 type Bsor struct {
 	Header  Header
 	Info    Info
@@ -119,6 +124,7 @@ type Bsor struct {
 	Notes   []Note
 	Walls   []Wall
 	Heights []Height
+	Pauses  []Pause
 }
 
 var byteOrder = binary.LittleEndian
@@ -175,6 +181,16 @@ func Read(file os.File, bsor *Bsor) (err error) {
 	}
 
 	err = readHeights(file, &bsor.Heights)
+	if err != nil {
+		return
+	}
+
+	_, err = readNextBytes(file, 1)
+	if err != nil {
+		return
+	}
+
+	err = readPauses(file, &bsor.Pauses)
 	if err != nil {
 		return
 	}
@@ -395,6 +411,19 @@ func readHeights(file os.File, heights *[]Height) (err error) {
 
 	*heights = make([]Height, heightsCount)
 	err = readAny(file, heights, binary.Size(*heights))
+
+	return
+}
+
+func readPauses(file os.File, pauses *[]Pause) (err error) {
+	var pausesCount uint32
+	err = readUInt32(file, &pausesCount)
+	if err != nil {
+		return
+	}
+
+	*pauses = make([]Pause, pausesCount)
+	err = readAny(file, pauses, binary.Size(*pauses))
 
 	return
 }
