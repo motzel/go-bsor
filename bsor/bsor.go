@@ -39,20 +39,24 @@ type Info struct {
 	Speed          float32
 }
 
-type Position struct {
+type Vector3 struct {
 	X float32
 	Y float32
 	Z float32
 }
 
+type Position Vector3
+
 type Rotation struct {
 	Position
 	W float32
 }
+
 type PositionAndRotation struct {
 	Position Position
 	Rotation Rotation
 }
+
 type Frame struct {
 	Time      float32
 	Fps       int32
@@ -61,10 +65,46 @@ type Frame struct {
 	RightHand PositionAndRotation
 }
 
+type NoteEventType int32
+
+const (
+	Good NoteEventType = iota
+	Bad
+	Miss
+	Bomb
+)
+
+type NoteCutInfo struct {
+	SpeedOk             bool
+	DirectionOk         bool
+	SaberTypeOk         bool
+	WasCutTooSoon       bool
+	SaberSpeed          float32
+	SaberDir            Vector3
+	SaberType           int32
+	TimeDeviation       float32
+	CutDirDeviation     float32
+	CutPoint            Vector3
+	CutNormal           Vector3
+	CutDistanceToCenter float32
+	CutAngle            float32
+	BeforeCutRating     float32
+	AfterCutRating      float32
+}
+
+type Note struct {
+	NoteId    int32
+	EventTime float32
+	SpawnTime float32
+	EventType NoteEventType
+	CutInfo   NoteCutInfo
+}
+
 type Bsor struct {
 	Header Header
 	Info   Info
 	Frames []Frame
+	Notes  []Note
 }
 
 var byteOrder = binary.LittleEndian
@@ -91,6 +131,16 @@ func Read(file os.File, bsor *Bsor) (err error) {
 	}
 
 	err = readFrames(file, &bsor.Frames)
+	if err != nil {
+		return
+	}
+
+	_, err = readNextBytes(file, 1)
+	if err != nil {
+		return
+	}
+
+	err = readNotes(file, &bsor.Notes)
 	if err != nil {
 		return
 	}
@@ -248,7 +298,43 @@ func readFrames(file os.File, frames *[]Frame) (err error) {
 	}
 
 	*frames = make([]Frame, framesCount)
-	readAny(file, frames, binary.Size(*frames))
+	err = readAny(file, frames, binary.Size(*frames))
+
+	return
+}
+
+func readNotes(file os.File, notes *[]Note) (err error) {
+	var notesCount uint32
+	err = readUInt32(file, &notesCount)
+	if err != nil {
+		return
+	}
+
+	*notes = make([]Note, notesCount)
+	for i := range *notes {
+		err = readAny(file, &(*notes)[i].NoteId, binary.Size((*notes)[i].NoteId))
+		if err != nil {
+			return
+		}
+		err = readAny(file, &(*notes)[i].EventTime, binary.Size((*notes)[i].EventTime))
+		if err != nil {
+			return
+		}
+		err = readAny(file, &(*notes)[i].SpawnTime, binary.Size((*notes)[i].SpawnTime))
+		if err != nil {
+			return
+		}
+		err = readAny(file, &(*notes)[i].EventType, binary.Size((*notes)[i].EventType))
+		if err != nil {
+			return
+		}
+		if (*notes)[i].EventType == Good {
+			err = readAny(file, &(*notes)[i].CutInfo, binary.Size((*notes)[i].CutInfo))
+			if err != nil {
+				return
+			}
+		}
+	}
 
 	return
 }
