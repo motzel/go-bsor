@@ -22,11 +22,9 @@ if err != nil {
 
 defer file.Close()
 
-var replay bsor.Bsor
-
-err = bsor.Read(*file, &replay)
-if err != nil {
-    log.Fatal("Read error: ", err)
+var replay *bsor.Bsor
+if replay, err = bsor.Read(file); err != nil {
+    log.Fatal("Replay decode: ", err)
 }
 
 fmt.Printf("BSOR version: %v\n", replay.Header.Version)
