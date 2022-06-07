@@ -2,7 +2,7 @@
 
 [Beat Saber Open Replay format](https://github.com/BeatLeader/BS-Open-Replay) parser written in Go
 
-**Disclaimer**: This is my Go learing project, so expect bugs and ugly code
+**Disclaimer**: This is my Go learning project, so expect bugs and ugly code
 
 ## Install
 
