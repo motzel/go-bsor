@@ -1,10 +1,10 @@
 package bsor
 
 import (
-	"bytes"
 	"encoding/binary"
 	"errors"
-	"os"
+	"fmt"
+	"io"
 	"strconv"
 )
 
@@ -56,6 +56,17 @@ type PositionAndRotation struct {
 	Position Position `json:"position"`
 	Rotation Rotation `json:"rotation"`
 }
+
+type PartType uint32
+
+const (
+	InfoPart PartType = iota
+	FramesPart
+	NotesPart
+	WallsPart
+	HeightsPart
+	PausesPart
+)
 
 type Frame struct {
 	Time      float32             `json:"time"`
@@ -129,257 +140,236 @@ type Bsor struct {
 
 var byteOrder = binary.LittleEndian
 
-func Read(file os.File, bsor *Bsor) (err error) {
-	err = readHeader(file, &bsor.Header)
-	if err != nil {
-		return
-	}
-
-	_, err = readNextBytes(file, 1)
-	if err != nil {
-		return
-	}
-
-	err = readInfo(file, &bsor.Info)
-	if err != nil {
-		return
-	}
-
-	_, err = readNextBytes(file, 1)
-	if err != nil {
-		return
-	}
-
-	err = readFrames(file, &bsor.Frames)
-	if err != nil {
-		return
-	}
-
-	_, err = readNextBytes(file, 1)
-	if err != nil {
-		return
-	}
-
-	err = readNotes(file, &bsor.Notes)
-	if err != nil {
-		return
-	}
-
-	_, err = readNextBytes(file, 1)
-	if err != nil {
-		return
-	}
-
-	err = readWalls(file, &bsor.Walls)
-	if err != nil {
-		return
-	}
-
-	_, err = readNextBytes(file, 1)
-	if err != nil {
-		return
-	}
-
-	err = readHeights(file, &bsor.Heights)
-	if err != nil {
-		return
-	}
-
-	_, err = readNextBytes(file, 1)
-	if err != nil {
-		return
-	}
-
-	err = readPauses(file, &bsor.Pauses)
-	if err != nil {
-		return
-	}
-
-	return
+type BsorError struct {
+	msg string
 }
 
-func readHeader(file os.File, header *Header) (err error) {
-	err = readAny(file, header, binary.Size(*header))
+func (e BsorError) Error() string { return e.msg }
+
+var ErrNotBsorFile = BsorError{"not a BSOR file"}
+var ErrUnknownBsorVersion = BsorError{"unknown BSOR version"}
+var ErrUnknownPart = BsorError{"unknown file part"}
+var ErrDecodeField = BsorError{"invalid value encountered"}
+
+func wrapError(err error) error {
+	var e *BsorError
+	if errors.As(err, &e) {
+		return fmt.Errorf("bsor read error: %w", e)
+	}
+
+	return fmt.Errorf("bsor read error: %v", err)
+}
+
+func Read(reader io.Reader, bsor *Bsor) (err error) {
+	err = readHeader(reader, &bsor.Header)
 	if err != nil {
+		return wrapError(err)
+	}
+
+	for {
+		var partType PartType
+		if partType, err = readPartType(reader); err != nil {
+			if err == io.EOF {
+				return nil
+			}
+
+			return wrapError(err)
+		}
+
+		switch partType {
+		case InfoPart:
+			err = readInfo(reader, &bsor.Info)
+
+		case FramesPart:
+			err = readFrames(reader, &bsor.Frames)
+
+		case NotesPart:
+			err = readNotes(reader, &bsor.Notes)
+
+		case WallsPart:
+			err = readWalls(reader, &bsor.Walls)
+
+		case HeightsPart:
+			err = readHeights(reader, &bsor.Heights)
+
+		case PausesPart:
+			err = readPauses(reader, &bsor.Pauses)
+
+		default:
+			return wrapError(ErrUnknownPart)
+		}
+
+		if err != nil {
+			return wrapError(err)
+		}
+	}
+}
+
+func readPartType(reader io.Reader) (PartType, error) {
+	partBytes, err := readBytes(reader, 1)
+	if err != nil {
+		return 0, err
+	}
+
+	return PartType(partBytes[0]), nil
+}
+
+func readHeader(reader io.Reader, header *Header) (err error) {
+	if err = readAny(reader, header, binary.Size(*header)); err != nil {
 		return
 	}
 
 	if header.Magic != 0x442d3d69 {
-		return errors.New("not a BSOR file")
+		return ErrNotBsorFile
 	}
 
 	if header.Version != 1 {
-		return errors.New("unknown BSOR version")
+		return ErrUnknownBsorVersion
 	}
 
 	return nil
 }
 
-func readInfo(file os.File, info *Info) (err error) {
-	err = readString(file, &info.ModVersion)
-	if err != nil {
+func readInfo(reader io.Reader, info *Info) (err error) {
+	if info.ModVersion, err = readString(reader); err != nil {
 		return
 	}
 
-	err = readString(file, &info.GameVersion)
-	if err != nil {
+	if info.GameVersion, err = readString(reader); err != nil {
 		return
 	}
 
 	var str string
-	err = readString(file, &str)
-	if err != nil {
+	if str, err = readString(reader); err != nil {
 		return
 	}
 	timestampInt, err := strconv.Atoi(str)
 	if err != nil {
-		return
+		return ErrDecodeField
 	}
 	info.Timestamp = uint32(timestampInt)
 
-	err = readString(file, &info.PlayerId)
-	if err != nil {
+	if info.PlayerId, err = readString(reader); err != nil {
 		return
 	}
 
-	err = readString(file, &info.PlayerName)
-	if err != nil {
+	if info.PlayerName, err = readString(reader); err != nil {
 		return
 	}
 
-	err = readString(file, &info.Platform)
-	if err != nil {
+	if info.Platform, err = readString(reader); err != nil {
 		return
 	}
 
-	err = readString(file, &info.TrackingSystem)
-	if err != nil {
+	if info.TrackingSystem, err = readString(reader); err != nil {
 		return
 	}
 
-	err = readString(file, &info.Hmd)
-	if err != nil {
+	if info.Hmd, err = readString(reader); err != nil {
 		return
 	}
 
-	err = readString(file, &info.Controller)
-	if err != nil {
+	if info.Controller, err = readString(reader); err != nil {
 		return
 	}
 
-	err = readString(file, &info.Hash)
-	if err != nil {
+	if info.Hash, err = readString(reader); err != nil {
 		return
 	}
 
-	err = readString(file, &info.SongName)
-	if err != nil {
+	if info.SongName, err = readString(reader); err != nil {
 		return
 	}
 
-	err = readString(file, &info.Mapper)
-	if err != nil {
+	if info.Mapper, err = readString(reader); err != nil {
 		return
 	}
 
-	err = readString(file, &info.Difficulty)
-	if err != nil {
+	if info.Difficulty, err = readString(reader); err != nil {
 		return
 	}
 
-	err = readAny(file, &info.Score, binary.Size(info.Score))
-	if err != nil {
+	if err = readAny(reader, &info.Score, binary.Size(info.Score)); err != nil {
 		return
 	}
 
-	err = readString(file, &info.Mode)
-	if err != nil {
+	if info.Mode, err = readString(reader); err != nil {
 		return
 	}
 
-	err = readString(file, &info.Environment)
-	if err != nil {
+	if info.Environment, err = readString(reader); err != nil {
 		return
 	}
 
-	err = readString(file, &info.Modifiers)
-	if err != nil {
+	if info.ModVersion, err = readString(reader); err != nil {
 		return
 	}
 
-	err = readAny(file, &info.JumpDistance, binary.Size(info.JumpDistance))
-	if err != nil {
+	if err = readAny(reader, &info.JumpDistance, binary.Size(info.JumpDistance)); err != nil {
 		return
 	}
 
-	err = readAny(file, &info.LeftHanded, binary.Size(info.LeftHanded))
-	if err != nil {
+	if err = readAny(reader, &info.LeftHanded, binary.Size(info.LeftHanded)); err != nil {
 		return
 	}
 
-	err = readAny(file, &info.Height, binary.Size(info.Height))
-	if err != nil {
+	if err = readAny(reader, &info.Height, binary.Size(info.Height)); err != nil {
 		return
 	}
 
-	err = readAny(file, &info.StartTime, binary.Size(info.StartTime))
-	if err != nil {
+	if err = readAny(reader, &info.StartTime, binary.Size(info.StartTime)); err != nil {
 		return
 	}
 
-	err = readAny(file, &info.FailTime, binary.Size(info.FailTime))
-	if err != nil {
+	if err = readAny(reader, &info.FailTime, binary.Size(info.FailTime)); err != nil {
 		return
 	}
 
-	err = readAny(file, &info.Speed, binary.Size(info.Speed))
-	if err != nil {
+	if err = readAny(reader, &info.Speed, binary.Size(info.Speed)); err != nil {
 		return
 	}
 
 	return nil
 }
 
-func readFrames(file os.File, frames *[]Frame) (err error) {
+func readFrames(reader io.Reader, frames *[]Frame) (err error) {
 	var framesCount uint32
-	err = readUInt32(file, &framesCount)
-	if err != nil {
+	if framesCount, err = readUInt32(reader); err != nil {
 		return
 	}
 
 	*frames = make([]Frame, framesCount)
-	err = readAny(file, frames, binary.Size(*frames))
+	err = readAny(reader, frames, binary.Size(*frames))
 
 	return
 }
 
-func readNotes(file os.File, notes *[]Note) (err error) {
+func readNotes(reader io.Reader, notes *[]Note) (err error) {
 	var notesCount uint32
-	err = readUInt32(file, &notesCount)
-	if err != nil {
+	if notesCount, err = readUInt32(reader); err != nil {
 		return
 	}
 
 	*notes = make([]Note, notesCount)
 	for i := range *notes {
-		err = readAny(file, &(*notes)[i].NoteId, binary.Size((*notes)[i].NoteId))
+		err = readAny(reader, &(*notes)[i].NoteId, binary.Size((*notes)[i].NoteId))
 		if err != nil {
 			return
 		}
-		err = readAny(file, &(*notes)[i].EventTime, binary.Size((*notes)[i].EventTime))
+		err = readAny(reader, &(*notes)[i].EventTime, binary.Size((*notes)[i].EventTime))
 		if err != nil {
 			return
 		}
-		err = readAny(file, &(*notes)[i].SpawnTime, binary.Size((*notes)[i].SpawnTime))
+		err = readAny(reader, &(*notes)[i].SpawnTime, binary.Size((*notes)[i].SpawnTime))
 		if err != nil {
 			return
 		}
-		err = readAny(file, &(*notes)[i].EventType, binary.Size((*notes)[i].EventType))
+		err = readAny(reader, &(*notes)[i].EventType, binary.Size((*notes)[i].EventType))
 		if err != nil {
 			return
 		}
 		if (*notes)[i].EventType == Good || (*notes)[i].EventType == Bad {
-			err = readAny(file, &(*notes)[i].CutInfo, binary.Size((*notes)[i].CutInfo))
+			err = readAny(reader, &(*notes)[i].CutInfo, binary.Size((*notes)[i].CutInfo))
 			if err != nil {
 				return
 			}
@@ -389,53 +379,44 @@ func readNotes(file os.File, notes *[]Note) (err error) {
 	return
 }
 
-func readWalls(file os.File, walls *[]Wall) (err error) {
+func readWalls(reader io.Reader, walls *[]Wall) (err error) {
 	var wallsCount uint32
-	err = readUInt32(file, &wallsCount)
-	if err != nil {
+	if wallsCount, err = readUInt32(reader); err != nil {
 		return
 	}
 
 	*walls = make([]Wall, wallsCount)
-	err = readAny(file, walls, binary.Size(*walls))
+	err = readAny(reader, walls, binary.Size(*walls))
 
 	return
 }
 
-func readHeights(file os.File, heights *[]Height) (err error) {
+func readHeights(reader io.Reader, heights *[]Height) (err error) {
 	var heightsCount uint32
-	err = readUInt32(file, &heightsCount)
-	if err != nil {
+	if heightsCount, err = readUInt32(reader); err != nil {
 		return
 	}
 
 	*heights = make([]Height, heightsCount)
-	err = readAny(file, heights, binary.Size(*heights))
+	err = readAny(reader, heights, binary.Size(*heights))
 
 	return
 }
 
-func readPauses(file os.File, pauses *[]Pause) (err error) {
+func readPauses(reader io.Reader, pauses *[]Pause) (err error) {
 	var pausesCount uint32
-	err = readUInt32(file, &pausesCount)
-	if err != nil {
+	if pausesCount, err = readUInt32(reader); err != nil {
 		return
 	}
 
 	*pauses = make([]Pause, pausesCount)
-	err = readAny(file, pauses, binary.Size(*pauses))
+	err = readAny(reader, pauses, binary.Size(*pauses))
 
 	return
 }
 
-func readAny(file os.File, out any, byteSize int) (err error) {
-	data, err := readNextBytes(file, byteSize)
-	if err != nil {
-		return
-	}
-
-	buffer := bytes.NewBuffer(data)
-	err = binary.Read(buffer, binary.LittleEndian, out)
+func readAny(reader io.Reader, out any, byteSize int) (err error) {
+	err = binary.Read(reader, binary.LittleEndian, out)
 	if err != nil {
 		return
 	}
@@ -443,44 +424,35 @@ func readAny(file os.File, out any, byteSize int) (err error) {
 	return nil
 }
 
-func readUInt32(file os.File, value *uint32) (err error) {
-	uintBytes, err := readNextBytes(file, 4)
-	if err != nil {
-		return err
+func readUInt32(reader io.Reader) (value uint32, err error) {
+	var uintBytes = make([]byte, 4)
+
+	if uintBytes, err = readBytes(reader, 4); err != nil {
+		return 0, err
 	}
 
-	*value = byteOrder.Uint32(uintBytes)
-
-	return nil
+	return byteOrder.Uint32(uintBytes), nil
 }
 
-func readString(file os.File, str *string) (err error) {
+func readString(reader io.Reader) (str string, err error) {
 	var size uint32
-	err = readUInt32(file, &size)
+	if size, err = readUInt32(reader); err != nil {
+		return
+	}
+
+	stringBytes, err := readBytes(reader, int(size))
 	if err != nil {
 		return
 	}
 
-	stringBytes, err := readNextBytes(file, int(size))
-	if err != nil {
-		return
-	}
-
-	*str = string(stringBytes)
-
-	return nil
+	return string(stringBytes), nil
 }
 
-func readNextBytes(file os.File, number int) (data []byte, err error) {
+func readBytes(reader io.Reader, number int) (data []byte, err error) {
 	bytes := make([]byte, number)
 
-	n, err := file.Read(bytes)
-	if err != nil {
+	if _, err := io.ReadFull(reader, bytes); err != nil {
 		return nil, err
-	}
-
-	if n != number {
-		return nil, errors.New("unexpected end of file")
 	}
 
 	return bytes, nil
