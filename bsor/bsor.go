@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"strconv"
+	"strings"
 )
 
 type Header struct {
@@ -14,29 +15,29 @@ type Header struct {
 }
 
 type Info struct {
-	ModVersion     string  `json:"modVersion"`
-	GameVersion    string  `json:"gameVersion"`
-	Timestamp      uint32  `json:"timestamp"`
-	PlayerId       string  `json:"playerId"`
-	PlayerName     string  `json:"playerName"`
-	Platform       string  `json:"platform"`
-	TrackingSystem string  `json:"trackingSystem"`
-	Hmd            string  `json:"hmd"`
-	Controller     string  `json:"controller"`
-	Hash           string  `json:"hash"`
-	SongName       string  `json:"songName"`
-	Mapper         string  `json:"mapper"`
-	Difficulty     string  `json:"difficulty"`
-	Score          uint32  `json:"score"`
-	Mode           string  `json:"mode"`
-	Environment    string  `json:"environment"`
-	Modifiers      string  `json:"modifiers"`
-	JumpDistance   float32 `json:"jumpDistance"`
-	LeftHanded     bool    `json:"leftHanded"`
-	Height         float32 `json:"height"`
-	StartTime      float32 `json:"startTime"`
-	FailTime       float32 `json:"failTime"`
-	Speed          float32 `json:"speed"`
+	ModVersion     string   `json:"modVersion"`
+	GameVersion    string   `json:"gameVersion"`
+	Timestamp      uint32   `json:"timestamp"`
+	PlayerId       string   `json:"playerId"`
+	PlayerName     string   `json:"playerName"`
+	Platform       string   `json:"platform"`
+	TrackingSystem string   `json:"trackingSystem"`
+	Hmd            string   `json:"hmd"`
+	Controller     string   `json:"controller"`
+	Hash           string   `json:"hash"`
+	SongName       string   `json:"songName"`
+	Mapper         string   `json:"mapper"`
+	Difficulty     string   `json:"difficulty"`
+	Score          uint32   `json:"score"`
+	Mode           string   `json:"mode"`
+	Environment    string   `json:"environment"`
+	Modifiers      []string `json:"modifiers"`
+	JumpDistance   float32  `json:"jumpDistance"`
+	LeftHanded     bool     `json:"leftHanded"`
+	Height         float32  `json:"height"`
+	StartTime      float32  `json:"startTime"`
+	FailTime       float32  `json:"failTime"`
+	Speed          float32  `json:"speed"`
 }
 
 type Vector3 struct {
@@ -104,18 +105,23 @@ type NoteCutInfo struct {
 }
 
 type Note struct {
-	NoteId    uint32        `json:"noteId"`
-	EventTime float32       `json:"eventTime"`
-	SpawnTime float32       `json:"spawnTime"`
-	EventType NoteEventType `json:"eventType"`
-	CutInfo   NoteCutInfo   `json:"cutInfo"`
+	LineIdx      byte          `json:"lineIdx"`
+	LineLayer    byte          `json:"lineLayer"`
+	ColorType    byte          `json:"colorType"`
+	CutDirection byte          `json:"cutDirection"`
+	EventTime    float32       `json:"eventTime"`
+	SpawnTime    float32       `json:"spawnTime"`
+	EventType    NoteEventType `json:"eventType"`
+	CutInfo      NoteCutInfo   `json:"cutInfo"`
 }
 
 type Wall struct {
-	WallId    uint32  `json:"wallId"`
-	Energy    float32 `json:"energy"`
-	Time      float32 `json:"time"`
-	SpawnTime float32 `json:"spawnTime"`
+	LineIdx      byte    `json:"lineIdx"`
+	ObstacleType byte    `json:"obstacleType"`
+	Width        byte    `json:"width"`
+	Energy       float32 `json:"energy"`
+	Time         float32 `json:"time"`
+	SpawnTime    float32 `json:"spawnTime"`
 }
 
 type Height struct {
@@ -160,20 +166,22 @@ func wrapError(err error) error {
 	return fmt.Errorf("bsor read error: %v", err)
 }
 
-func Read(reader io.Reader, bsor *Bsor) (err error) {
-	err = readHeader(reader, &bsor.Header)
-	if err != nil {
-		return wrapError(err)
+func Read(reader io.Reader) (*Bsor, error) {
+	var bsor Bsor
+	var err error
+
+	if err = readHeader(reader, &bsor.Header); err != nil {
+		return &bsor, wrapError(err)
 	}
 
 	for {
 		var partType PartType
 		if partType, err = readPartType(reader); err != nil {
 			if err == io.EOF {
-				return nil
+				return &bsor, nil
 			}
 
-			return wrapError(err)
+			return nil, wrapError(err)
 		}
 
 		switch partType {
@@ -181,7 +189,7 @@ func Read(reader io.Reader, bsor *Bsor) (err error) {
 			err = readInfo(reader, &bsor.Info)
 
 		case FramesPart:
-			err = readFrames(reader, &bsor.Frames)
+			err = readWholeSlice(reader, &bsor.Frames)
 
 		case NotesPart:
 			err = readNotes(reader, &bsor.Notes)
@@ -190,17 +198,17 @@ func Read(reader io.Reader, bsor *Bsor) (err error) {
 			err = readWalls(reader, &bsor.Walls)
 
 		case HeightsPart:
-			err = readHeights(reader, &bsor.Heights)
+			err = readWholeSlice(reader, &bsor.Heights)
 
 		case PausesPart:
-			err = readPauses(reader, &bsor.Pauses)
+			err = readWholeSlice(reader, &bsor.Pauses)
 
 		default:
-			return wrapError(ErrUnknownPart)
+			return &bsor, wrapError(ErrUnknownPart)
 		}
 
 		if err != nil {
-			return wrapError(err)
+			return nil, wrapError(err)
 		}
 	}
 }
@@ -214,9 +222,9 @@ func readPartType(reader io.Reader) (PartType, error) {
 	return PartType(partBytes[0]), nil
 }
 
-func readHeader(reader io.Reader, header *Header) (err error) {
-	if err = readAny(reader, header, binary.Size(*header)); err != nil {
-		return
+func readHeader(reader io.Reader, header *Header) error {
+	if err := readAny(reader, header, binary.Size(*header)); err != nil {
+		return err
 	}
 
 	if header.Magic != 0x442d3d69 {
@@ -232,16 +240,16 @@ func readHeader(reader io.Reader, header *Header) (err error) {
 
 func readInfo(reader io.Reader, info *Info) (err error) {
 	if info.ModVersion, err = readString(reader); err != nil {
-		return
+		return err
 	}
 
 	if info.GameVersion, err = readString(reader); err != nil {
-		return
+		return err
 	}
 
 	var str string
 	if str, err = readString(reader); err != nil {
-		return
+		return err
 	}
 	timestampInt, err := strconv.Atoi(str)
 	if err != nil {
@@ -250,98 +258,99 @@ func readInfo(reader io.Reader, info *Info) (err error) {
 	info.Timestamp = uint32(timestampInt)
 
 	if info.PlayerId, err = readString(reader); err != nil {
-		return
+		return err
 	}
 
 	if info.PlayerName, err = readString(reader); err != nil {
-		return
+		return err
 	}
 
 	if info.Platform, err = readString(reader); err != nil {
-		return
+		return err
 	}
 
 	if info.TrackingSystem, err = readString(reader); err != nil {
-		return
+		return err
 	}
 
 	if info.Hmd, err = readString(reader); err != nil {
-		return
+		return err
 	}
 
 	if info.Controller, err = readString(reader); err != nil {
-		return
+		return err
 	}
 
 	if info.Hash, err = readString(reader); err != nil {
-		return
+		return err
 	}
 
 	if info.SongName, err = readString(reader); err != nil {
-		return
+		return err
 	}
 
 	if info.Mapper, err = readString(reader); err != nil {
-		return
+		return err
 	}
 
 	if info.Difficulty, err = readString(reader); err != nil {
-		return
+		return err
 	}
 
 	if err = readAny(reader, &info.Score, binary.Size(info.Score)); err != nil {
-		return
+		return err
 	}
 
 	if info.Mode, err = readString(reader); err != nil {
-		return
+		return err
 	}
 
 	if info.Environment, err = readString(reader); err != nil {
-		return
+		return err
 	}
 
-	if info.ModVersion, err = readString(reader); err != nil {
-		return
+	var modifiersCsv string
+	if modifiersCsv, err = readString(reader); err != nil {
+		return err
 	}
+	info.Modifiers = strings.Split(modifiersCsv, ",")
 
 	if err = readAny(reader, &info.JumpDistance, binary.Size(info.JumpDistance)); err != nil {
-		return
+		return err
 	}
 
 	if err = readAny(reader, &info.LeftHanded, binary.Size(info.LeftHanded)); err != nil {
-		return
+		return err
 	}
 
 	if err = readAny(reader, &info.Height, binary.Size(info.Height)); err != nil {
-		return
+		return err
 	}
 
 	if err = readAny(reader, &info.StartTime, binary.Size(info.StartTime)); err != nil {
-		return
+		return err
 	}
 
 	if err = readAny(reader, &info.FailTime, binary.Size(info.FailTime)); err != nil {
-		return
+		return err
 	}
 
 	if err = readAny(reader, &info.Speed, binary.Size(info.Speed)); err != nil {
-		return
+		return err
 	}
 
 	return nil
 }
 
-func readFrames(reader io.Reader, frames *[]Frame) (err error) {
-	var framesCount uint32
-	if framesCount, err = readUInt32(reader); err != nil {
+func readWholeSlice[T any](reader io.Reader, slice *[]T) (err error) {
+	var sliceLength uint32
+	if sliceLength, err = readUInt32(reader); err != nil {
 		return
 	}
 
-	*frames = make([]Frame, framesCount)
-	err = readAny(reader, frames, binary.Size(*frames))
+	*slice = make([]T, sliceLength)
 
-	return
+	return readAny(reader, slice, binary.Size(*slice))
 }
 
 func readNotes(reader io.Reader, notes *[]Note) (err error) {
@@ -352,25 +361,29 @@ func readNotes(reader io.Reader, notes *[]Note) (err error) {
 
 	*notes = make([]Note, notesCount)
 	for i := range *notes {
-		err = readAny(reader, &(*notes)[i].NoteId, binary.Size((*notes)[i].NoteId))
-		if err != nil {
+		var noteId uint32
+		if noteId, err = readUInt32(reader); err != nil {
 			return
 		}
-		err = readAny(reader, &(*notes)[i].EventTime, binary.Size((*notes)[i].EventTime))
-		if err != nil {
+		(*notes)[i].LineIdx = byte(noteId / 1000)
+		noteId = noteId % 1000
+		(*notes)[i].LineLayer = byte(noteId / 100)
+		noteId = noteId % 100
+		(*notes)[i].ColorType = byte(noteId / 10)
+		noteId = noteId % 10
+		(*notes)[i].CutDirection = byte(noteId)
+
+		if err = readAny(reader, &(*notes)[i].EventTime, binary.Size((*notes)[i].EventTime)); err != nil {
 			return
 		}
-		err = readAny(reader, &(*notes)[i].SpawnTime, binary.Size((*notes)[i].SpawnTime))
-		if err != nil {
+		if err = readAny(reader, &(*notes)[i].SpawnTime, binary.Size((*notes)[i].SpawnTime)); err != nil {
 			return
 		}
-		err = readAny(reader, &(*notes)[i].EventType, binary.Size((*notes)[i].EventType))
-		if err != nil {
+		if err = readAny(reader, &(*notes)[i].EventType, binary.Size((*notes)[i].EventType)); err != nil {
 			return
 		}
 		if (*notes)[i].EventType == Good || (*notes)[i].EventType == Bad {
-			err = readAny(reader, &(*notes)[i].CutInfo, binary.Size((*notes)[i].CutInfo))
-			if err != nil {
+			if err = readAny(reader, &(*notes)[i].CutInfo, binary.Size((*notes)[i].CutInfo)); err != nil {
 				return
 			}
 		}
@@ -386,42 +399,33 @@ func readWalls(reader io.Reader, walls *[]Wall) (err error) {
 	}
 
 	*walls = make([]Wall, wallsCount)
-	err = readAny(reader, walls, binary.Size(*walls))
+	for i := range *walls {
+		var wallId uint32
+		if wallId, err = readUInt32(reader); err != nil {
+			return
+		}
+		(*walls)[i].LineIdx = byte(wallId / 100)
+		wallId = wallId % 100
+		(*walls)[i].ObstacleType = byte(wallId / 10)
+		wallId = wallId % 10
+		(*walls)[i].Width = byte(wallId)
+
+		if err = readAny(reader, &(*walls)[i].Energy, binary.Size((*walls)[i].Energy)); err != nil {
+			return
+		}
+		if err = readAny(reader, &(*walls)[i].Time, binary.Size((*walls)[i].Time)); err != nil {
+			return
+		}
+		if err = readAny(reader, &(*walls)[i].SpawnTime, binary.Size((*walls)[i].SpawnTime)); err != nil {
+			return
+		}
+	}
 
 	return
 }
 
-func readHeights(reader io.Reader, heights *[]Height) (err error) {
-	var heightsCount uint32
-	if heightsCount, err = readUInt32(reader); err != nil {
-		return
-	}
-
-	*heights = make([]Height, heightsCount)
-	err = readAny(reader, heights, binary.Size(*heights))
-
-	return
-}
-
-func readPauses(reader io.Reader, pauses *[]Pause) (err error) {
-	var pausesCount uint32
-	if pausesCount, err = readUInt32(reader); err != nil {
-		return
-	}
-
-	*pauses = make([]Pause, pausesCount)
-	err = readAny(reader, pauses, binary.Size(*pauses))
-
-	return
-}
-
-func readAny(reader io.Reader, out any, byteSize int) (err error) {
-	err = binary.Read(reader, binary.LittleEndian, out)
-	if err != nil {
-		return
-	}
-
-	return nil
+func readAny(reader io.Reader, out any, byteSize int) error {
+	return binary.Read(reader, binary.LittleEndian, out)
 }
 
 func readUInt32(reader io.Reader) (value uint32, err error) {
