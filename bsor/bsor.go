@@ -9,60 +9,60 @@ import (
 )
 
 type Header struct {
-	Magic   uint32
-	Version byte
+	Magic   uint32 `json:"-"`
+	Version byte   `json:"version"`
 }
 
 type Info struct {
-	ModVersion     string
-	GameVersion    string
-	Timestamp      uint32
-	PlayerId       string
-	PlayerName     string
-	Platform       string
-	TrackingSystem string
-	Hmd            string
-	Controller     string
-	Hash           string
-	SongName       string
-	Mapper         string
-	Difficulty     string
-	Score          uint32
-	Mode           string
-	Environment    string
-	Modifiers      string
-	JumpDistance   float32
-	LeftHanded     bool
-	Height         float32
-	StartTime      float32
-	FailTime       float32
-	Speed          float32
+	ModVersion     string  `json:"modVersion"`
+	GameVersion    string  `json:"gameVersion"`
+	Timestamp      uint32  `json:"timestamp"`
+	PlayerId       string  `json:"playerId"`
+	PlayerName     string  `json:"playerName"`
+	Platform       string  `json:"platform"`
+	TrackingSystem string  `json:"trackingSystem"`
+	Hmd            string  `json:"hmd"`
+	Controller     string  `json:"controller"`
+	Hash           string  `json:"hash"`
+	SongName       string  `json:"songName"`
+	Mapper         string  `json:"mapper"`
+	Difficulty     string  `json:"difficulty"`
+	Score          uint32  `json:"score"`
+	Mode           string  `json:"mode"`
+	Environment    string  `json:"environment"`
+	Modifiers      string  `json:"modifiers"`
+	JumpDistance   float32 `json:"jumpDistance"`
+	LeftHanded     bool    `json:"leftHanded"`
+	Height         float32 `json:"height"`
+	StartTime      float32 `json:"startTime"`
+	FailTime       float32 `json:"failTime"`
+	Speed          float32 `json:"speed"`
 }
 
 type Vector3 struct {
-	X float32
-	Y float32
-	Z float32
+	X float32 `json:"x"`
+	Y float32 `json:"y"`
+	Z float32 `json:"z"`
 }
 
 type Position Vector3
 
 type Rotation struct {
 	Position
-	W float32
+	W float32 `json:"w"`
 }
 
 type PositionAndRotation struct {
-	Position Position
-	Rotation Rotation
+	Position Position `json:"position"`
+	Rotation Rotation `json:"rotation"`
 }
 
 type Frame struct {
-	Time      float32
-	Fps       uint32
-	Header    PositionAndRotation
-	LeftHand  PositionAndRotation
-	RightHand PositionAndRotation
+	Time      float32             `json:"time"`
+	Fps       uint32              `json:"fps"`
+	Head      PositionAndRotation `json:"head"`
+	LeftHand  PositionAndRotation `json:"leftHand"`
+	RightHand PositionAndRotation `json:"rightHand"`
 }
 
 type NoteEventType uint32
@@ -75,56 +75,56 @@ const (
 )
 
 type NoteCutInfo struct {
-	SpeedOk             bool
-	DirectionOk         bool
-	SaberTypeOk         bool
-	WasCutTooSoon       bool
-	SaberSpeed          float32
-	SaberDir            Vector3
-	SaberType           uint32
-	TimeDeviation       float32
-	CutDirDeviation     float32
-	CutPoint            Vector3
-	CutNormal           Vector3
-	CutDistanceToCenter float32
-	CutAngle            float32
-	BeforeCutRating     float32
-	AfterCutRating      float32
+	SpeedOk             bool    `json:"speedOk"`
+	DirectionOk         bool    `json:"directionOk"`
+	SaberTypeOk         bool    `json:"saberTypeOk"`
+	WasCutTooSoon       bool    `json:"wasCutTooSoon"`
+	SaberSpeed          float32 `json:"saberSpeed"`
+	SaberDir            Vector3 `json:"saberDir"`
+	SaberType           uint32  `json:"saberType"`
+	TimeDeviation       float32 `json:"timeDeviation"`
+	CutDirDeviation     float32 `json:"cutDirDeviation"`
+	CutPoint            Vector3 `json:"cutPoint"`
+	CutNormal           Vector3 `json:"cutNormal"`
+	CutDistanceToCenter float32 `json:"cutDistanceToCenter"`
+	CutAngle            float32 `json:"cutAngle"`
+	BeforeCutRating     float32 `json:"beforeCutRating"`
+	AfterCutRating      float32 `json:"afterCutRating"`
 }
 
 type Note struct {
-	NoteId    uint32
-	EventTime float32
-	SpawnTime float32
-	EventType NoteEventType
-	CutInfo   NoteCutInfo
+	NoteId    uint32        `json:"noteId"`
+	EventTime float32       `json:"eventTime"`
+	SpawnTime float32       `json:"spawnTime"`
+	EventType NoteEventType `json:"eventType"`
+	CutInfo   NoteCutInfo   `json:"cutInfo"`
 }
 
 type Wall struct {
-	WallId    uint32
-	Energy    float32
-	Time      float32
-	SpawnTime float32
+	WallId    uint32  `json:"wallId"`
+	Energy    float32 `json:"energy"`
+	Time      float32 `json:"time"`
+	SpawnTime float32 `json:"spawnTime"`
 }
 
 type Height struct {
-	Height float32
-	Time   float32
+	Height float32 `json:"height"`
+	Time   float32 `json:"time"`
 }
 
 type Pause struct {
-	Duration uint32
-	Time     float32
+	Duration uint32  `json:"duration"`
+	Time     float32 `json:"time"`
 }
 
 type Bsor struct {
-	Header  Header
-	Info    Info
-	Frames  []Frame
-	Notes   []Note
-	Walls   []Wall
-	Heights []Height
-	Pauses  []Pause
+	Header
+	Info    Info     `json:"info"`
+	Frames  []Frame  `json:"frames"`
+	Notes   []Note   `json:"notes"`
+	Walls   []Wall   `json:"walls"`
+	Heights []Height `json:"heights"`
+	Pauses  []Pause  `json:"pauses"`
 }
 
 var byteOrder = binary.LittleEndian
