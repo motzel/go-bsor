@@ -104,15 +104,29 @@ type NoteCutInfo struct {
 	AfterCutRating      float32 `json:"afterCutRating"`
 }
 
+type NoteScoringType byte
+
+const (
+	NormalOld NoteScoringType = iota
+	Ignore
+	NoScore
+	Normal
+	SliderHead
+	SliderTail
+	BurstSliderHead
+	BurstSliderElement
+)
+
 type Note struct {
-	LineIdx      byte          `json:"lineIdx"`
-	LineLayer    byte          `json:"lineLayer"`
-	ColorType    byte          `json:"colorType"`
-	CutDirection byte          `json:"cutDirection"`
-	EventTime    float32       `json:"eventTime"`
-	SpawnTime    float32       `json:"spawnTime"`
-	EventType    NoteEventType `json:"eventType"`
-	CutInfo      NoteCutInfo   `json:"cutInfo"`
+	ScoringType  NoteScoringType `json:"scoringType"`
+	LineIdx      byte            `json:"lineIdx"`
+	LineLayer    byte            `json:"lineLayer"`
+	ColorType    byte            `json:"colorType"`
+	CutDirection byte            `json:"cutDirection"`
+	EventTime    float32         `json:"eventTime"`
+	SpawnTime    float32         `json:"spawnTime"`
+	EventType    NoteEventType   `json:"eventType"`
+	CutInfo      NoteCutInfo     `json:"cutInfo"`
 }
 
 type Wall struct {
@@ -365,6 +379,9 @@ func readNotes(reader io.Reader, notes *[]Note) (err error) {
 		if noteId, err = readUInt32(reader); err != nil {
 			return
 		}
+
+		(*notes)[i].ScoringType = NoteScoringType(noteId / 10000)
+		noteId = noteId % 10000
 		(*notes)[i].LineIdx = byte(noteId / 1000)
 		noteId = noteId % 1000
 		(*notes)[i].LineLayer = byte(noteId / 100)
