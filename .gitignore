@@ -19,3 +19,6 @@ go.work
 
 # Other
 *.log
+
+# Jetbrains IDE
+.idea

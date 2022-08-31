@@ -144,7 +144,7 @@ type Height struct {
 }
 
 type Pause struct {
-	Duration uint32  `json:"duration"`
+	Duration uint64  `json:"duration"`
 	Time     float32 `json:"time"`
 }
 
