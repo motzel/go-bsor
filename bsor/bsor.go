@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"strconv"
 	"strings"
 )
@@ -28,7 +29,7 @@ type Info struct {
 	SongName       string   `json:"songName"`
 	Mapper         string   `json:"mapper"`
 	Difficulty     string   `json:"difficulty"`
-	Score          uint32   `json:"score"`
+	Score          int32    `json:"score"`
 	Mode           string   `json:"mode"`
 	Environment    string   `json:"environment"`
 	Modifiers      []string `json:"modifiers"`
@@ -49,7 +50,7 @@ type Vector3 struct {
 type Position Vector3
 
 type Rotation struct {
-	Position
+	Vector3
 	W float32 `json:"w"`
 }
 
@@ -71,13 +72,13 @@ const (
 
 type Frame struct {
 	Time      float32             `json:"time"`
-	Fps       uint32              `json:"fps"`
+	Fps       int32               `json:"fps"`
 	Head      PositionAndRotation `json:"head"`
 	LeftHand  PositionAndRotation `json:"leftHand"`
 	RightHand PositionAndRotation `json:"rightHand"`
 }
 
-type NoteEventType uint32
+type NoteEventType int32
 
 const (
 	Good NoteEventType = iota
@@ -93,7 +94,7 @@ type NoteCutInfo struct {
 	WasCutTooSoon       bool    `json:"wasCutTooSoon"`
 	SaberSpeed          float32 `json:"saberSpeed"`
 	SaberDir            Vector3 `json:"saberDir"`
-	SaberType           uint32  `json:"saberType"`
+	SaberType           int32   `json:"saberType"`
 	TimeDeviation       float32 `json:"timeDeviation"`
 	CutDirDeviation     float32 `json:"cutDirDeviation"`
 	CutPoint            Vector3 `json:"cutPoint"`
@@ -117,11 +118,18 @@ const (
 	BurstSliderElement
 )
 
+type ColorType byte
+
+const (
+	Red ColorType = iota
+	Blue
+)
+
 type Note struct {
 	ScoringType  NoteScoringType `json:"scoringType"`
 	LineIdx      byte            `json:"lineIdx"`
 	LineLayer    byte            `json:"lineLayer"`
-	ColorType    byte            `json:"colorType"`
+	ColorType    ColorType       `json:"colorType"`
 	CutDirection byte            `json:"cutDirection"`
 	EventTime    float32         `json:"eventTime"`
 	SpawnTime    float32         `json:"spawnTime"`
@@ -138,24 +146,47 @@ type Wall struct {
 	SpawnTime    float32 `json:"spawnTime"`
 }
 
-type Height struct {
+type AutomaticHeight struct {
 	Height float32 `json:"height"`
 	Time   float32 `json:"time"`
 }
 
 type Pause struct {
-	Duration uint64  `json:"duration"`
+	Duration int64   `json:"duration"`
 	Time     float32 `json:"time"`
 }
 
 type Bsor struct {
 	Header
-	Info    Info     `json:"info"`
-	Frames  []Frame  `json:"frames"`
-	Notes   []Note   `json:"notes"`
-	Walls   []Wall   `json:"walls"`
-	Heights []Height `json:"heights"`
-	Pauses  []Pause  `json:"pauses"`
+	Info    Info              `json:"info"`
+	Frames  []Frame           `json:"frames"`
+	Notes   []Note            `json:"notes"`
+	Walls   []Wall            `json:"walls"`
+	Heights []AutomaticHeight `json:"heights"`
+	Pauses  []Pause           `json:"pauses"`
+}
+
+type NoteSimple struct {
+	ScoringType     NoteScoringType `json:"scoringType"`
+	LineIdx         byte            `json:"lineIdx"`
+	LineLayer       byte            `json:"lineLayer"`
+	ColorType       ColorType       `json:"colorType"`
+	CutDirection    byte            `json:"cutDirection"`
+	EventTime       float32         `json:"eventTime"`
+	EventType       NoteEventType   `json:"eventType"`
+	TimeDependence  float32         `json:"timeDependence"`
+	BeforeCutRating float32         `json:"beforeCutRating"`
+	AfterCutRating  float32         `json:"afterCutRating"`
+	BeforeCut       byte            `json:"beforeCut"`
+	AfterCut        byte            `json:"afterCut"`
+	AccCut          byte            `json:"accCut"`
+}
+
+type BsorSimple struct {
+	Info   Info         `json:"info"`
+	Notes  []NoteSimple `json:"notes"`
+	Walls  []Wall       `json:"walls"`
+	Pauses []Pause      `json:"pauses"`
 }
 
 var byteOrder = binary.LittleEndian
@@ -178,6 +209,54 @@ func wrapError(err error) error {
 	}
 
 	return fmt.Errorf("bsor read error: %v", err)
+}
+
+func clamp(value float64, min float64, max float64) float64 {
+	return math.Min(math.Max(min, value), max)
+}
+
+func NewBsorSimple(bsor *Bsor) *BsorSimple {
+	stats := &BsorSimple{Info: bsor.Info, Notes: make([]NoteSimple, len(bsor.Notes)), Walls: bsor.Walls, Pauses: bsor.Pauses}
+
+	for i := range bsor.Notes {
+		note := bsor.Notes[i]
+		noteSimple := &stats.Notes[i]
+
+		noteSimple.ScoringType = note.ScoringType
+		noteSimple.LineIdx = note.LineIdx
+		noteSimple.LineLayer = note.LineLayer
+		noteSimple.ColorType = note.ColorType
+		noteSimple.CutDirection = note.CutDirection
+		noteSimple.EventTime = note.EventTime
+		noteSimple.EventType = note.EventType
+		noteSimple.TimeDependence = float32(math.Abs(float64(note.CutInfo.CutNormal.Z)))
+		noteSimple.BeforeCutRating = note.CutInfo.BeforeCutRating
+		noteSimple.AfterCutRating = note.CutInfo.AfterCutRating
+
+		noteSimple.BeforeCut = 0
+		if note.ScoringType == SliderTail {
+			noteSimple.BeforeCut = 70
+		} else if note.ScoringType != BurstSliderElement {
+			noteSimple.BeforeCut = byte(math.Round(clamp(float64(note.CutInfo.BeforeCutRating*70), 0, 70)))
+		}
+
+		noteSimple.AfterCut = 0
+		if note.ScoringType == SliderHead {
+			noteSimple.AfterCut = 30
+		} else if note.ScoringType != BurstSliderElement && note.ScoringType != BurstSliderHead {
+			noteSimple.AfterCut = byte(math.Round(clamp(float64(note.CutInfo.AfterCutRating*30), 0, 30)))
+		}
+
+		noteSimple.AccCut = 0
+		if note.ScoringType == BurstSliderElement {
+			noteSimple.AccCut = 20
+		} else {
+			noteSimple.AccCut = byte(math.Round(15 * (1 - clamp(float64(note.CutInfo.CutDistanceToCenter/0.3), 0, 1))))
+		}
+
+	}
+
+	return stats
 }
 
 func Read(reader io.Reader) (*Bsor, error) {
@@ -223,6 +302,10 @@ func Read(reader io.Reader) (*Bsor, error) {
 
 		if err != nil {
 			return nil, wrapError(err)
+		}
+
+		if partType == PausesPart {
+			return &bsor, nil
 		}
 	}
 }
@@ -386,7 +469,7 @@ func readNotes(reader io.Reader, notes *[]Note) (err error) {
 		noteId = noteId % 1000
 		(*notes)[i].LineLayer = byte(noteId / 100)
 		noteId = noteId % 100
-		(*notes)[i].ColorType = byte(noteId / 10)
+		(*notes)[i].ColorType = ColorType(byte(noteId / 10))
 		noteId = noteId % 10
 		(*notes)[i].CutDirection = byte(noteId)
 
