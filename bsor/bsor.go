@@ -11,8 +11,8 @@ import (
 )
 
 type Header struct {
-	Magic   uint32 `json:"-"`
-	Version byte   `json:"version"`
+	Magic   int32 `json:"-"`
+	Version byte  `json:"version"`
 }
 
 type Info struct {
@@ -59,7 +59,7 @@ type PositionAndRotation struct {
 	Rotation Rotation `json:"rotation"`
 }
 
-type PartType uint32
+type PartType int32
 
 const (
 	InfoPart PartType = iota
@@ -485,8 +485,8 @@ func readInfo(reader io.Reader, info *Info) (err error) {
 }
 
 func readWholeSlice[T any](reader io.Reader, slice *[]T) (err error) {
-	var sliceLength uint32
-	if sliceLength, err = readUInt32(reader); err != nil {
+	var sliceLength int32
+	if sliceLength, err = readInt32(reader); err != nil {
 		return
 	}
 
@@ -496,15 +496,15 @@ func readWholeSlice[T any](reader io.Reader, slice *[]T) (err error) {
 }
 
 func readNotes(reader io.Reader, notes *[]Note) (err error) {
-	var notesCount uint32
-	if notesCount, err = readUInt32(reader); err != nil {
+	var notesCount int32
+	if notesCount, err = readInt32(reader); err != nil {
 		return
 	}
 
 	*notes = make([]Note, notesCount)
 	for i := range *notes {
-		var noteId uint32
-		if noteId, err = readUInt32(reader); err != nil {
+		var noteId int32
+		if noteId, err = readInt32(reader); err != nil {
 			return
 		}
 
@@ -538,15 +538,15 @@ func readNotes(reader io.Reader, notes *[]Note) (err error) {
 }
 
 func readWalls(reader io.Reader, walls *[]WallHit) (err error) {
-	var wallsCount uint32
-	if wallsCount, err = readUInt32(reader); err != nil {
+	var wallsCount int32
+	if wallsCount, err = readInt32(reader); err != nil {
 		return
 	}
 
 	*walls = make([]WallHit, wallsCount)
 	for i := range *walls {
-		var wallId uint32
-		if wallId, err = readUInt32(reader); err != nil {
+		var wallId int32
+		if wallId, err = readInt32(reader); err != nil {
 			return
 		}
 		(*walls)[i].LineIdx = byte(wallId / 100)
@@ -573,28 +573,58 @@ func readAny(reader io.Reader, out any) error {
 	return binary.Read(reader, binary.LittleEndian, out)
 }
 
-func readUInt32(reader io.Reader) (value uint32, err error) {
+func readInt32(reader io.Reader) (value int32, err error) {
 	var uintBytes = make([]byte, 4)
 
 	if uintBytes, err = readBytes(reader, 4); err != nil {
 		return 0, err
 	}
 
-	return byteOrder.Uint32(uintBytes), nil
+	return int32(byteOrder.Uint32(uintBytes)), nil
 }
 
-func readString(reader io.Reader) (str string, err error) {
-	var size uint32
-	if size, err = readUInt32(reader); err != nil {
-		return
-	}
-
-	stringBytes, err := readBytes(reader, int(size))
+func readStringWithLength(reader io.Reader, length int) (str string, err error) {
+	stringBytes, err := readBytes(reader, length)
 	if err != nil {
-		return
+		return "", err
 	}
 
 	return string(stringBytes), nil
+}
+
+func fixStringSize(reader io.Reader, size int32) (int32, error) {
+	bytes := make([]byte, 4)
+	byteOrder.PutUint32(bytes[0:], uint32(size))
+
+	var b uint8
+	if err := binary.Read(reader, binary.LittleEndian, &b); err != nil {
+		return 0, err
+	}
+
+	bytes = bytes[1:]
+	bytes = append(bytes, b)
+
+	size = int32(byteOrder.Uint32(bytes))
+	if size > 1000 || size < 0 {
+		return fixStringSize(reader, size)
+	}
+
+	return size, nil
+}
+
+func readString(reader io.Reader) (str string, err error) {
+	var size int32
+	if size, err = readInt32(reader); err != nil {
+		return "", err
+	}
+
+	if size > 1000 || size < 0 {
+		if size, err = fixStringSize(reader, size); err != nil {
+			return "", err
+		}
+	}
+
+	return readStringWithLength(reader, int(size))
 }
 
 func readBytes(reader io.Reader, number int) (data []byte, err error) {
