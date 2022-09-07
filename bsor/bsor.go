@@ -70,6 +70,25 @@ const (
 	PausesPart
 )
 
+func (s PartType) String() string {
+	switch s {
+	case InfoPart:
+		return "Info"
+	case FramesPart:
+		return "Frames"
+	case NotesPart:
+		return "Notes"
+	case WallsPart:
+		return "Walls"
+	case HeightsPart:
+		return "Heights"
+	case PausesPart:
+		return "Pauses"
+	default:
+		return "Unknown"
+	}
+}
+
 type Frame struct {
 	Time      float32             `json:"time"`
 	Fps       int32               `json:"fps"`
@@ -86,6 +105,21 @@ const (
 	Miss
 	Bomb
 )
+
+func (s NoteEventType) String() string {
+	switch s {
+	case Good:
+		return "Good"
+	case Bad:
+		return "Bad"
+	case Miss:
+		return "Miss"
+	case Bomb:
+		return "Bomb"
+	default:
+		return "Unknown"
+	}
+}
 
 type NoteCutInfo struct {
 	SpeedOk             bool    `json:"speedOk"`
@@ -118,6 +152,29 @@ const (
 	BurstSliderElement
 )
 
+func (s NoteScoringType) String() string {
+	switch s {
+	case NormalOld:
+		return "NormalOld"
+	case Ignore:
+		return "Ignore"
+	case NoScore:
+		return "NoScore"
+	case Normal:
+		return "Normal"
+	case SliderHead:
+		return "SliderHead"
+	case SliderTail:
+		return "SliderTail"
+	case BurstSliderHead:
+		return "BurstSliderHead"
+	case BurstSliderElement:
+		return "BurstSliderElement"
+	default:
+		return "Unknown"
+	}
+}
+
 type ColorType byte
 
 const (
@@ -125,19 +182,69 @@ const (
 	Blue
 )
 
+func (s ColorType) String() string {
+	switch s {
+	case Red:
+		return "Red"
+	case Blue:
+		return "Blue"
+	default:
+		return "Unknown"
+	}
+}
+
+type CutDirection byte
+
+const (
+	TopCenter = iota
+	BottomCenter
+	MiddleLeft
+	MiddleRight
+	TopLeft
+	TopRight
+	BottomLeft
+	BottomRight
+	Dot
+)
+
+func (s CutDirection) String() string {
+	switch s {
+	case TopCenter:
+		return "TopCenter"
+	case BottomCenter:
+		return "BottomCenter"
+	case MiddleLeft:
+		return "MiddleLeft"
+	case MiddleRight:
+		return "MiddleRight"
+	case TopLeft:
+		return "TopLeft"
+	case TopRight:
+		return "TopRight"
+	case BottomLeft:
+		return "BottomLeft"
+	case BottomRight:
+		return "BottomRight"
+	case Dot:
+		return "Dot"
+	default:
+		return "Unknown"
+	}
+}
+
 type Note struct {
 	ScoringType  NoteScoringType `json:"scoringType"`
 	LineIdx      byte            `json:"lineIdx"`
 	LineLayer    byte            `json:"lineLayer"`
 	ColorType    ColorType       `json:"colorType"`
-	CutDirection byte            `json:"cutDirection"`
+	CutDirection CutDirection    `json:"cutDirection"`
 	EventTime    float32         `json:"eventTime"`
 	SpawnTime    float32         `json:"spawnTime"`
 	EventType    NoteEventType   `json:"eventType"`
 	CutInfo      NoteCutInfo     `json:"cutInfo"`
 }
 
-type Wall struct {
+type WallHit struct {
 	LineIdx      byte    `json:"lineIdx"`
 	ObstacleType byte    `json:"obstacleType"`
 	Width        byte    `json:"width"`
@@ -156,54 +263,31 @@ type Pause struct {
 	Time     float32 `json:"time"`
 }
 
-type Bsor struct {
+type Replay struct {
 	Header
 	Info    Info              `json:"info"`
 	Frames  []Frame           `json:"frames"`
 	Notes   []Note            `json:"notes"`
-	Walls   []Wall            `json:"walls"`
+	Walls   []WallHit         `json:"walls"`
 	Heights []AutomaticHeight `json:"heights"`
 	Pauses  []Pause           `json:"pauses"`
 }
 
-type NoteSimple struct {
-	ScoringType     NoteScoringType `json:"scoringType"`
-	LineIdx         byte            `json:"lineIdx"`
-	LineLayer       byte            `json:"lineLayer"`
-	ColorType       ColorType       `json:"colorType"`
-	CutDirection    byte            `json:"cutDirection"`
-	EventTime       float32         `json:"eventTime"`
-	EventType       NoteEventType   `json:"eventType"`
-	TimeDependence  float32         `json:"timeDependence"`
-	BeforeCutRating float32         `json:"beforeCutRating"`
-	AfterCutRating  float32         `json:"afterCutRating"`
-	BeforeCut       byte            `json:"beforeCut"`
-	AfterCut        byte            `json:"afterCut"`
-	AccCut          byte            `json:"accCut"`
-}
-
-type BsorSimple struct {
-	Info   Info         `json:"info"`
-	Notes  []NoteSimple `json:"notes"`
-	Walls  []Wall       `json:"walls"`
-	Pauses []Pause      `json:"pauses"`
-}
-
 var byteOrder = binary.LittleEndian
 
-type BsorError struct {
+type Error struct {
 	msg string
 }
 
-func (e BsorError) Error() string { return e.msg }
+func (e Error) Error() string { return e.msg }
 
-var ErrNotBsorFile = BsorError{"not a BSOR file"}
-var ErrUnknownBsorVersion = BsorError{"unknown BSOR version"}
-var ErrUnknownPart = BsorError{"unknown file part"}
-var ErrDecodeField = BsorError{"invalid value encountered"}
+var ErrNotBsorFile = Error{"not a BSOR file"}
+var ErrUnknownBsorVersion = Error{"unknown BSOR version"}
+var ErrUnknownPart = Error{"unknown file part"}
+var ErrDecodeField = Error{"invalid value encountered"}
 
 func wrapError(err error) error {
-	var e *BsorError
+	var e *Error
 	if errors.As(err, &e) {
 		return fmt.Errorf("bsor read error: %w", e)
 	}
@@ -215,63 +299,19 @@ func clamp(value float64, min float64, max float64) float64 {
 	return math.Min(math.Max(min, value), max)
 }
 
-func NewBsorSimple(bsor *Bsor) *BsorSimple {
-	stats := &BsorSimple{Info: bsor.Info, Notes: make([]NoteSimple, len(bsor.Notes)), Walls: bsor.Walls, Pauses: bsor.Pauses}
-
-	for i := range bsor.Notes {
-		note := bsor.Notes[i]
-		noteSimple := &stats.Notes[i]
-
-		noteSimple.ScoringType = note.ScoringType
-		noteSimple.LineIdx = note.LineIdx
-		noteSimple.LineLayer = note.LineLayer
-		noteSimple.ColorType = note.ColorType
-		noteSimple.CutDirection = note.CutDirection
-		noteSimple.EventTime = note.EventTime
-		noteSimple.EventType = note.EventType
-		noteSimple.TimeDependence = float32(math.Abs(float64(note.CutInfo.CutNormal.Z)))
-		noteSimple.BeforeCutRating = note.CutInfo.BeforeCutRating
-		noteSimple.AfterCutRating = note.CutInfo.AfterCutRating
-
-		noteSimple.BeforeCut = 0
-		if note.ScoringType == SliderTail {
-			noteSimple.BeforeCut = 70
-		} else if note.ScoringType != BurstSliderElement {
-			noteSimple.BeforeCut = byte(math.Round(clamp(float64(note.CutInfo.BeforeCutRating*70), 0, 70)))
-		}
-
-		noteSimple.AfterCut = 0
-		if note.ScoringType == SliderHead {
-			noteSimple.AfterCut = 30
-		} else if note.ScoringType != BurstSliderElement && note.ScoringType != BurstSliderHead {
-			noteSimple.AfterCut = byte(math.Round(clamp(float64(note.CutInfo.AfterCutRating*30), 0, 30)))
-		}
-
-		noteSimple.AccCut = 0
-		if note.ScoringType == BurstSliderElement {
-			noteSimple.AccCut = 20
-		} else {
-			noteSimple.AccCut = byte(math.Round(15 * (1 - clamp(float64(note.CutInfo.CutDistanceToCenter/0.3), 0, 1))))
-		}
-
-	}
-
-	return stats
-}
-
-func Read(reader io.Reader) (*Bsor, error) {
-	var bsor Bsor
+func Read(reader io.Reader) (*Replay, error) {
+	var replay Replay
 	var err error
 
-	if err = readHeader(reader, &bsor.Header); err != nil {
-		return &bsor, wrapError(err)
+	if err = readHeader(reader, &replay.Header); err != nil {
+		return &replay, wrapError(err)
 	}
 
 	for {
 		var partType PartType
 		if partType, err = readPartType(reader); err != nil {
 			if err == io.EOF {
-				return &bsor, nil
+				return &replay, nil
 			}
 
 			return nil, wrapError(err)
@@ -279,25 +319,25 @@ func Read(reader io.Reader) (*Bsor, error) {
 
 		switch partType {
 		case InfoPart:
-			err = readInfo(reader, &bsor.Info)
+			err = readInfo(reader, &replay.Info)
 
 		case FramesPart:
-			err = readWholeSlice(reader, &bsor.Frames)
+			err = readWholeSlice(reader, &replay.Frames)
 
 		case NotesPart:
-			err = readNotes(reader, &bsor.Notes)
+			err = readNotes(reader, &replay.Notes)
 
 		case WallsPart:
-			err = readWalls(reader, &bsor.Walls)
+			err = readWalls(reader, &replay.Walls)
 
 		case HeightsPart:
-			err = readWholeSlice(reader, &bsor.Heights)
+			err = readWholeSlice(reader, &replay.Heights)
 
 		case PausesPart:
-			err = readWholeSlice(reader, &bsor.Pauses)
+			err = readWholeSlice(reader, &replay.Pauses)
 
 		default:
-			return &bsor, wrapError(ErrUnknownPart)
+			return &replay, wrapError(ErrUnknownPart)
 		}
 
 		if err != nil {
@@ -305,7 +345,7 @@ func Read(reader io.Reader) (*Bsor, error) {
 		}
 
 		if partType == PausesPart {
-			return &bsor, nil
+			return &replay, nil
 		}
 	}
 }
@@ -320,7 +360,7 @@ func readPartType(reader io.Reader) (PartType, error) {
 }
 
 func readHeader(reader io.Reader, header *Header) error {
-	if err := readAny(reader, header, binary.Size(*header)); err != nil {
+	if err := readAny(reader, header); err != nil {
 		return err
 	}
 
@@ -394,7 +434,7 @@ func readInfo(reader io.Reader, info *Info) (err error) {
 		return err
 	}
 
-	if err = readAny(reader, &info.Score, binary.Size(info.Score)); err != nil {
+	if err = readAny(reader, &info.Score); err != nil {
 		return err
 	}
 
@@ -410,29 +450,34 @@ func readInfo(reader io.Reader, info *Info) (err error) {
 	if modifiersCsv, err = readString(reader); err != nil {
 		return err
 	}
-	info.Modifiers = strings.Split(modifiersCsv, ",")
+	modifiers := strings.Split(modifiersCsv, ",")
+	if len(modifiers) > 1 || len(modifiers[0]) > 0 {
+		info.Modifiers = modifiers
+	} else {
+		info.Modifiers = []string{}
+	}
 
-	if err = readAny(reader, &info.JumpDistance, binary.Size(info.JumpDistance)); err != nil {
+	if err = readAny(reader, &info.JumpDistance); err != nil {
 		return err
 	}
 
-	if err = readAny(reader, &info.LeftHanded, binary.Size(info.LeftHanded)); err != nil {
+	if err = readAny(reader, &info.LeftHanded); err != nil {
 		return err
 	}
 
-	if err = readAny(reader, &info.Height, binary.Size(info.Height)); err != nil {
+	if err = readAny(reader, &info.Height); err != nil {
 		return err
 	}
 
-	if err = readAny(reader, &info.StartTime, binary.Size(info.StartTime)); err != nil {
+	if err = readAny(reader, &info.StartTime); err != nil {
 		return err
 	}
 
-	if err = readAny(reader, &info.FailTime, binary.Size(info.FailTime)); err != nil {
+	if err = readAny(reader, &info.FailTime); err != nil {
 		return err
 	}
 
-	if err = readAny(reader, &info.Speed, binary.Size(info.Speed)); err != nil {
+	if err = readAny(reader, &info.Speed); err != nil {
 		return err
 	}
 
@@ -447,7 +492,7 @@ func readWholeSlice[T any](reader io.Reader, slice *[]T) (err error) {
 
 	*slice = make([]T, sliceLength)
 
-	return readAny(reader, slice, binary.Size(*slice))
+	return readAny(reader, slice)
 }
 
 func readNotes(reader io.Reader, notes *[]Note) (err error) {
@@ -471,19 +516,19 @@ func readNotes(reader io.Reader, notes *[]Note) (err error) {
 		noteId = noteId % 100
 		(*notes)[i].ColorType = ColorType(byte(noteId / 10))
 		noteId = noteId % 10
-		(*notes)[i].CutDirection = byte(noteId)
+		(*notes)[i].CutDirection = CutDirection(noteId)
 
-		if err = readAny(reader, &(*notes)[i].EventTime, binary.Size((*notes)[i].EventTime)); err != nil {
+		if err = readAny(reader, &(*notes)[i].EventTime); err != nil {
 			return
 		}
-		if err = readAny(reader, &(*notes)[i].SpawnTime, binary.Size((*notes)[i].SpawnTime)); err != nil {
+		if err = readAny(reader, &(*notes)[i].SpawnTime); err != nil {
 			return
 		}
-		if err = readAny(reader, &(*notes)[i].EventType, binary.Size((*notes)[i].EventType)); err != nil {
+		if err = readAny(reader, &(*notes)[i].EventType); err != nil {
 			return
 		}
 		if (*notes)[i].EventType == Good || (*notes)[i].EventType == Bad {
-			if err = readAny(reader, &(*notes)[i].CutInfo, binary.Size((*notes)[i].CutInfo)); err != nil {
+			if err = readAny(reader, &(*notes)[i].CutInfo); err != nil {
 				return
 			}
 		}
@@ -492,13 +537,13 @@ func readNotes(reader io.Reader, notes *[]Note) (err error) {
 	return
 }
 
-func readWalls(reader io.Reader, walls *[]Wall) (err error) {
+func readWalls(reader io.Reader, walls *[]WallHit) (err error) {
 	var wallsCount uint32
 	if wallsCount, err = readUInt32(reader); err != nil {
 		return
 	}
 
-	*walls = make([]Wall, wallsCount)
+	*walls = make([]WallHit, wallsCount)
 	for i := range *walls {
 		var wallId uint32
 		if wallId, err = readUInt32(reader); err != nil {
@@ -510,13 +555,13 @@ func readWalls(reader io.Reader, walls *[]Wall) (err error) {
 		wallId = wallId % 10
 		(*walls)[i].Width = byte(wallId)
 
-		if err = readAny(reader, &(*walls)[i].Energy, binary.Size((*walls)[i].Energy)); err != nil {
+		if err = readAny(reader, &(*walls)[i].Energy); err != nil {
 			return
 		}
-		if err = readAny(reader, &(*walls)[i].Time, binary.Size((*walls)[i].Time)); err != nil {
+		if err = readAny(reader, &(*walls)[i].Time); err != nil {
 			return
 		}
-		if err = readAny(reader, &(*walls)[i].SpawnTime, binary.Size((*walls)[i].SpawnTime)); err != nil {
+		if err = readAny(reader, &(*walls)[i].SpawnTime); err != nil {
 			return
 		}
 	}
@@ -524,7 +569,7 @@ func readWalls(reader io.Reader, walls *[]Wall) (err error) {
 	return
 }
 
-func readAny(reader io.Reader, out any, byteSize int) error {
+func readAny(reader io.Reader, out any) error {
 	return binary.Read(reader, binary.LittleEndian, out)
 }
 
