@@ -58,19 +58,44 @@ type StatInfo struct {
 }
 
 type HandStat struct {
-	AvgAccCut       float64   `json:"avgAccCut"`
-	AvgBeforeCut    float64   `json:"avgBeforeCut"`
-	AvgAfterCut     float64   `json:"avgAfterCut"`
-	AvgScore        float64   `json:"avgScore"`
-	AvgScorePercent float64   `json:"avgScorePercent"`
-	TimeDependence  float64   `json:"timeDependence"`
-	PreSwing        float64   `json:"preSwing"`
-	PostSwing       float64   `json:"postSwing"`
-	Grid            []float64 `json:"grid"`
-	Notes           int       `json:"notes"`
-	Misses          int       `json:"misses"`
-	BadCuts         int       `json:"badCuts"`
-	BombHits        int       `json:"bombHit"`
+	MinAccCut            uint16    `json:"minAccCut"`
+	AvgAccCut            float64   `json:"avgAccCut"`
+	MedianAccCut         uint16    `json:"medAccCut"`
+	MaxAccCut            uint16    `json:"maxAccCut"`
+	MinBeforeCut         uint16    `json:"minBeforeCut"`
+	AvgBeforeCut         float64   `json:"avgBeforeCut"`
+	MedianBeforeCut      uint16    `json:"medBeforeCut"`
+	MaxBeforeCut         uint16    `json:"maxBeforeCut"`
+	MinAfterCut          uint16    `json:"minAfterCut"`
+	AvgAfterCut          float64   `json:"avgAfterCut"`
+	MedianAfterCut       uint16    `json:"medAfterCut"`
+	MaxAfterCut          uint16    `json:"maxAfterCut"`
+	MinScore             uint16    `json:"minScore"`
+	AvgScore             float64   `json:"avgScore"`
+	MedianScore          uint16    `json:"medScore"`
+	MaxScore             uint16    `json:"maxScore"`
+	AvgScorePercent      float64   `json:"avgScorePercent"`
+	MedianScorePercent   float64   `json:"medScorePercent"`
+	MinTimeDependence    float64   `json:"minTimeDependence"`
+	AvgTimeDependence    float64   `json:"avgTimeDependence"`
+	MedianTimeDependence float64   `json:"medTimeDependence"`
+	MaxTimeDependence    float64   `json:"maxTimeDependence"`
+	MinPreSwing          float64   `json:"minPreSwing"`
+	AvgPreSwing          float64   `json:"avgPreSwing"`
+	MedianPreSwing       float64   `json:"medPreSwing"`
+	MaxPreswing          float64   `json:"maxPreswing"`
+	MinPostSwing         float64   `json:"minPostSwing"`
+	AvgPostSwing         float64   `json:"avgPostSwing"`
+	MedianPostSwing      float64   `json:"medPostSwing"`
+	MaxPostSwing         float64   `json:"maxPostSwing"`
+	MinGrid              []uint16  `json:"minGrid"`
+	AvgGrid              []float64 `json:"avgGrid"`
+	MedianGrid           []uint16  `json:"medGrid"`
+	MaxGrid              []uint16  `json:"maxGrid"`
+	Notes                int       `json:"notes"`
+	Misses               int       `json:"misses"`
+	BadCuts              int       `json:"badCuts"`
+	BombHits             int       `json:"bombHit"`
 }
 
 type Stats struct {
@@ -86,17 +111,18 @@ type ReplayStats struct {
 
 func (stat *HandStat) calcPercentAcc() {
 	stat.AvgScorePercent = stat.AvgScore / BlockMaxValue * 100
+	stat.MedianScorePercent = float64(stat.MedianScore) / BlockMaxValue * 100
 }
 
 type StatBuffer struct {
-	AccCut         buffer.Buffer[byte, int64]
-	BeforeCut      buffer.Buffer[byte, int64]
-	AfterCut       buffer.Buffer[byte, int64]
-	Score          buffer.Buffer[byte, int64]
+	AccCut         buffer.Buffer[uint16, int64]
+	BeforeCut      buffer.Buffer[uint16, int64]
+	AfterCut       buffer.Buffer[uint16, int64]
+	Score          buffer.Buffer[uint16, int64]
 	TimeDependence buffer.Buffer[float64, float64]
 	PreSwing       buffer.Buffer[float64, float64]
 	PostSwing      buffer.Buffer[float64, float64]
-	Grid           []buffer.Buffer[byte, int64]
+	Grid           []buffer.Buffer[uint16, int64]
 	Notes          int
 	Misses         int
 	BadCuts        int
@@ -108,18 +134,18 @@ func (buf *StatBuffer) add(goodNoteCut *GoodCutEvent) {
 
 	if goodNoteCut.EventType == Good {
 		if goodNoteCut.ScoringType != SliderTail && goodNoteCut.ScoringType != BurstSliderElement {
-			buf.BeforeCut.Add(goodNoteCut.BeforeCut)
+			buf.BeforeCut.Add(uint16(goodNoteCut.BeforeCut))
 			buf.PreSwing.Add(float64(goodNoteCut.BeforeCutRating))
 		}
 
 		if goodNoteCut.ScoringType != BurstSliderHead && goodNoteCut.ScoringType != BurstSliderElement {
-			buf.AccCut.Add(goodNoteCut.AccCut)
-			buf.Score.Add(score)
+			buf.AccCut.Add(uint16(goodNoteCut.AccCut))
+			buf.Score.Add(uint16(score))
 			buf.TimeDependence.Add(float64(goodNoteCut.TimeDependence))
 		}
 
 		if goodNoteCut.ScoringType != SliderHead && goodNoteCut.ScoringType != BurstSliderHead && goodNoteCut.ScoringType != BurstSliderElement {
-			buf.AfterCut.Add(goodNoteCut.AfterCut)
+			buf.AfterCut.Add(uint16(goodNoteCut.AfterCut))
 			buf.PostSwing.Add(float64(goodNoteCut.AfterCutRating))
 		}
 
@@ -128,25 +154,49 @@ func (buf *StatBuffer) add(goodNoteCut *GoodCutEvent) {
 			if index < 0 || index > 11 {
 				index = 0
 			}
-			buf.Grid[index].Add(score)
+			buf.Grid[index].Add(uint16(score))
 		}
 	}
 }
 
 func (buf *StatBuffer) stat() *HandStat {
 	stat := &HandStat{
-		AvgAccCut:      buf.AccCut.Avg(),
-		AvgBeforeCut:   buf.BeforeCut.Avg(),
-		AvgAfterCut:    buf.AfterCut.Avg(),
-		AvgScore:       buf.Score.Avg(),
-		TimeDependence: buf.TimeDependence.Avg(),
-		PreSwing:       buf.PreSwing.Avg() * 100,
-		PostSwing:      buf.PostSwing.Avg() * 100,
-		Grid:           utils.SliceMap[buffer.Buffer[byte, int64], float64](buf.Grid, func(buf buffer.Buffer[byte, int64]) float64 { return buf.Avg() }),
-		Notes:          buf.Notes,
-		Misses:         buf.Misses,
-		BadCuts:        buf.BadCuts,
-		BombHits:       buf.BombHits,
+		MinAccCut:            utils.SliceMin[uint16](buf.AccCut.Values),
+		AvgAccCut:            buf.AccCut.Avg(),
+		MedianAccCut:         buf.AccCut.Median(),
+		MaxAccCut:            utils.SliceMax[uint16](buf.AccCut.Values),
+		MinBeforeCut:         utils.SliceMin[uint16](buf.BeforeCut.Values),
+		AvgBeforeCut:         buf.BeforeCut.Avg(),
+		MedianBeforeCut:      buf.BeforeCut.Median(),
+		MaxBeforeCut:         utils.SliceMax[uint16](buf.BeforeCut.Values),
+		MinAfterCut:          utils.SliceMin[uint16](buf.AfterCut.Values),
+		AvgAfterCut:          buf.AfterCut.Avg(),
+		MedianAfterCut:       buf.AfterCut.Median(),
+		MaxAfterCut:          utils.SliceMax[uint16](buf.AfterCut.Values),
+		MinScore:             utils.SliceMin[uint16](buf.Score.Values),
+		AvgScore:             buf.Score.Avg(),
+		MedianScore:          buf.Score.Median(),
+		MaxScore:             utils.SliceMax[uint16](buf.Score.Values),
+		MinTimeDependence:    utils.SliceMin[float64](buf.TimeDependence.Values),
+		AvgTimeDependence:    buf.TimeDependence.Avg(),
+		MedianTimeDependence: buf.TimeDependence.Median(),
+		MaxTimeDependence:    utils.SliceMax[float64](buf.TimeDependence.Values),
+		MinPreSwing:          utils.SliceMin[float64](buf.PreSwing.Values),
+		AvgPreSwing:          buf.PreSwing.Avg() * 100,
+		MedianPreSwing:       buf.PreSwing.Median() * 100,
+		MaxPreswing:          utils.SliceMax[float64](buf.PreSwing.Values) * 100,
+		MinPostSwing:         utils.SliceMin[float64](buf.PostSwing.Values),
+		AvgPostSwing:         buf.PostSwing.Avg() * 100,
+		MedianPostSwing:      buf.PostSwing.Median() * 100,
+		MaxPostSwing:         utils.SliceMax[float64](buf.PostSwing.Values) * 100,
+		MinGrid:              utils.SliceMap[buffer.Buffer[uint16, int64], uint16](buf.Grid, func(buf buffer.Buffer[uint16, int64]) uint16 { return utils.SliceMin[uint16](buf.Values) }),
+		AvgGrid:              utils.SliceMap[buffer.Buffer[uint16, int64], float64](buf.Grid, func(buf buffer.Buffer[uint16, int64]) float64 { return buf.Avg() }),
+		MedianGrid:           utils.SliceMap[buffer.Buffer[uint16, int64], uint16](buf.Grid, func(buf buffer.Buffer[uint16, int64]) uint16 { return buf.Median() }),
+		MaxGrid:              utils.SliceMap[buffer.Buffer[uint16, int64], uint16](buf.Grid, func(buf buffer.Buffer[uint16, int64]) uint16 { return utils.SliceMax[uint16](buf.Values) }),
+		Notes:                buf.Notes,
+		Misses:               buf.Misses,
+		BadCuts:              buf.BadCuts,
+		BombHits:             buf.BombHits,
 	}
 
 	stat.calcPercentAcc()
@@ -155,22 +205,22 @@ func (buf *StatBuffer) stat() *HandStat {
 }
 
 func newStatBuffer(length int) *StatBuffer {
-	accCutBuffer := buffer.NewBuffer[byte, int64](length)
-	beforeCutBuffer := buffer.NewBuffer[byte, int64](length)
-	afterCutBuffer := buffer.NewBuffer[byte, int64](length)
-	accBuffer := buffer.NewBuffer[byte, int64](length)
+	accCutBuffer := buffer.NewBuffer[uint16, int64](length)
+	beforeCutBuffer := buffer.NewBuffer[uint16, int64](length)
+	afterCutBuffer := buffer.NewBuffer[uint16, int64](length)
+	accBuffer := buffer.NewBuffer[uint16, int64](length)
 
-	gridBuffer := [12]buffer.Buffer[byte, int64]{}
+	gridBuffer := [12]buffer.Buffer[uint16, int64]{}
 
 	return &StatBuffer{
 		AccCut:    accCutBuffer,
 		BeforeCut: beforeCutBuffer,
 		AfterCut:  afterCutBuffer,
 		Score:     accBuffer,
-		Grid: utils.SliceMap[buffer.Buffer[byte, int64], buffer.Buffer[byte, int64]](
+		Grid: utils.SliceMap[buffer.Buffer[uint16, int64], buffer.Buffer[uint16, int64]](
 			gridBuffer[:],
-			func(buf buffer.Buffer[byte, int64]) buffer.Buffer[byte, int64] {
-				return buffer.NewBuffer[byte, int64](length)
+			func(buf buffer.Buffer[uint16, int64]) buffer.Buffer[uint16, int64] {
+				return buffer.NewBuffer[uint16, int64](length)
 			},
 		),
 	}

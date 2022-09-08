@@ -1,14 +1,18 @@
 package buffer
 
-type value interface {
-	float32 | float64 | byte | int8 | int16 | int32 | int64
+import (
+	"sort"
+)
+
+type Value interface {
+	float32 | float64 | byte | int8 | int16 | uint16 | int32 | uint32 | int64 | uint64
 }
 
 type sum interface {
 	float64 | int64
 }
 
-type Buffer[T value, S sum] struct {
+type Buffer[T Value, S sum] struct {
 	Values []T
 	Sum    S
 }
@@ -28,6 +32,27 @@ func (buffer *Buffer[T, S]) Avg() float64 {
 	}
 }
 
-func NewBuffer[T value, S sum](length int) Buffer[T, S] {
+func sortSlice[T Value](s []T) {
+	sort.Slice(s, func(i, j int) bool {
+		return s[i] < s[j]
+	})
+}
+
+func (buffer *Buffer[T, S]) Median() T {
+	length := len(buffer.Values)
+	if length == 0 {
+		return T(0)
+	}
+
+	sortSlice(buffer.Values)
+
+	if length%2 == 0 {
+		return (buffer.Values[length/2-1] + buffer.Values[length/2]) / 2
+	} else {
+		return buffer.Values[length/2]
+	}
+}
+
+func NewBuffer[T Value, S sum](length int) Buffer[T, S] {
 	return Buffer[T, S]{Values: make([]T, 0, length), Sum: 0}
 }
