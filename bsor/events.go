@@ -50,6 +50,7 @@ func getNoteScore(eventType NoteEventType, scoringType NoteScoringType, cutInfo 
 }
 
 type GameEventI interface {
+	GetIdx() int32
 	GetTime() float32
 	GetColor() ColorType
 	GetScore() byte
@@ -59,6 +60,7 @@ type GameEventI interface {
 }
 
 type GameEvent struct {
+	EventIdx     int32
 	EventType    NoteEventType   `json:"eventType"`
 	ScoringType  NoteScoringType `json:"scoringType"`
 	LineIdx      byte            `json:"lineIdx"`
@@ -67,6 +69,10 @@ type GameEvent struct {
 	CutDirection CutDirection    `json:"cutDirection"`
 	EventTime    float32         `json:"eventTime"`
 	GameEventI
+}
+
+func (gameEvent *GameEvent) GetIdx() int32 {
+	return gameEvent.EventIdx
 }
 
 func (gameEvent *GameEvent) GetTime() float32 {
@@ -151,8 +157,13 @@ type BombHitEvent struct {
 }
 
 type WallHitEvent struct {
+	EventIdx int32
 	WallHit
 	GameEventI
+}
+
+func (wallHit *WallHitEvent) GetIdx() int32 {
+	return wallHit.EventIdx
 }
 
 func (wallHit *WallHitEvent) IsNote() bool {
@@ -209,7 +220,11 @@ func calculateStats(events *ReplayEvents, gameEvents []GameEventI) {
 	maxMultiplier := NewMultiplierCounter()
 
 	sort.Slice(gameEvents, func(i, j int) bool {
-		return gameEvents[i].GetTime() <= gameEvents[j].GetTime()
+		if gameEvents[i].GetTime() == gameEvents[j].GetTime() {
+			return gameEvents[i].GetIdx() <= gameEvents[j].GetIdx()
+		}
+
+		return gameEvents[i].GetTime() < gameEvents[j].GetTime()
 	})
 
 	leftFcBuffer := buffer.NewCircularBuffer[byte, int64](fcBufferSize)
@@ -330,6 +345,7 @@ func NewReplayEvents(replay *Replay) *ReplayEvents {
 		timeDependence := float32(math.Abs(float64(note.CutInfo.CutNormal.Z)))
 
 		gameEvent := GameEvent{
+			EventIdx:     int32(i),
 			EventType:    note.EventType,
 			ScoringType:  note.ScoringType,
 			LineIdx:      note.LineIdx,
@@ -369,8 +385,10 @@ func NewReplayEvents(replay *Replay) *ReplayEvents {
 		}
 	}
 
+	numOfNotes := len(replay.Notes)
+
 	for i := range replay.Walls {
-		wallHitEvent := WallHitEvent{WallHit: replay.Walls[i]}
+		wallHitEvent := WallHitEvent{EventIdx: int32(i) + int32(numOfNotes), WallHit: replay.Walls[i]}
 		events.Walls = append(events.Walls, wallHitEvent)
 		gameEvents = append(gameEvents, &wallHitEvent)
 	}
