@@ -1,9 +1,25 @@
 package constraints
 
+type Float interface {
+	float32 | float64
+}
+
+type Signed interface {
+	int8 | int16 | int32 | int64
+}
+
+type Unsigned interface {
+	byte | uint16 | int32 | uint32 | uint64
+}
+
+type HighestPrecision interface {
+	float64 | int64
+}
+
 type NumericValue interface {
-	float32 | float64 | byte | int8 | int16 | uint16 | int32 | uint32 | int64 | uint64
+	Float | Signed | Unsigned
 }
 
 type Sum interface {
-	float64 | int64
+	HighestPrecision
 }

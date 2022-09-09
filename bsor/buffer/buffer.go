@@ -7,6 +7,20 @@ import (
 	"sort"
 )
 
+type Stats[T constraints.NumericValue] struct {
+	Min    T       `json:"min"`
+	Avg    float64 `json:"avg"`
+	Median T       `json:"med"`
+	Max    T       `json:"max"`
+}
+
+type StatsSlice[T constraints.NumericValue] struct {
+	Min    []T       `json:"min"`
+	Avg    []float64 `json:"avg"`
+	Median []T       `json:"med"`
+	Max    []T       `json:"max"`
+}
+
 type Buffer[T constraints.NumericValue, S constraints.Sum] struct {
 	values []T
 	sum    S
@@ -65,6 +79,15 @@ func (buffer *Buffer[T, S]) Median() T {
 		return (buffer.values[length/2-1] + buffer.values[length/2]) / 2
 	} else {
 		return buffer.values[length/2]
+	}
+}
+
+func (buffer *Buffer[T, S]) Stats() Stats[T] {
+	return Stats[T]{
+		Min:    buffer.Min(),
+		Avg:    buffer.Avg(),
+		Median: buffer.Median(),
+		Max:    buffer.Max(),
 	}
 }
 
