@@ -57,10 +57,14 @@ type GameEventI interface {
 	GetMaxScore() byte
 	DecreasesCombo() bool
 	IsNote() bool
+	GetAccuracy() float64
+	SetAccuracy(acc float64)
+	GetFcAccuracy() float64
+	SetFcAccuracy(acc float64)
 }
 
 type GameEvent struct {
-	EventIdx     int32
+	EventIdx     int32           `json:"-"`
 	EventType    NoteEventType   `json:"eventType"`
 	ScoringType  NoteScoringType `json:"scoringType"`
 	LineIdx      byte            `json:"lineIdx"`
@@ -68,7 +72,9 @@ type GameEvent struct {
 	ColorType    ColorType       `json:"colorType"`
 	CutDirection CutDirection    `json:"cutDirection"`
 	EventTime    float32         `json:"eventTime"`
-	GameEventI
+	Accuracy     float64         `json:"accuracy"`
+	FcAccuracy   float64         `json:"fcAccuracy"`
+	GameEventI   `json:"-"`
 }
 
 func (gameEvent *GameEvent) GetIdx() int32 {
@@ -104,6 +110,22 @@ func (gameEvent *GameEvent) DecreasesCombo() bool {
 
 func (gameEvent *GameEvent) IsNote() bool {
 	return false
+}
+
+func (gameEvent *GameEvent) GetAccuracy() float64 {
+	return gameEvent.Accuracy
+}
+
+func (gameEvent *GameEvent) SetAccuracy(acc float64) {
+	gameEvent.Accuracy = acc
+}
+
+func (gameEvent *GameEvent) GetFcAccuracy() float64 {
+	return gameEvent.FcAccuracy
+}
+
+func (gameEvent *GameEvent) SetFcAccuracy(acc float64) {
+	gameEvent.FcAccuracy = acc
 }
 
 type GoodNoteCutEvent struct {
@@ -157,9 +179,11 @@ type BombHitEvent struct {
 }
 
 type WallHitEvent struct {
-	EventIdx int32
+	EventIdx   int32   `json:"-"`
+	Accuracy   float64 `json:"accuracy"`
+	FcAccuracy float64 `json:"fcAccuracy"`
 	WallHit
-	GameEventI
+	GameEventI `json:"-"`
 }
 
 func (wallHit *WallHitEvent) GetIdx() int32 {
@@ -188,6 +212,22 @@ func (wallHit *WallHitEvent) DecreasesCombo() bool {
 
 func (wallHit *WallHitEvent) GetColor() ColorType {
 	return NoColor
+}
+
+func (wallHit *WallHitEvent) GetAccuracy() float64 {
+	return wallHit.Accuracy
+}
+
+func (wallHit *WallHitEvent) SetAccuracy(acc float64) {
+	wallHit.Accuracy = acc
+}
+
+func (wallHit *WallHitEvent) GetFcAccuracy() float64 {
+	return wallHit.FcAccuracy
+}
+
+func (wallHit *WallHitEvent) SetFcAccuracy(acc float64) {
+	wallHit.FcAccuracy = acc
 }
 
 type ReplayEventsInfo struct {
@@ -233,7 +273,7 @@ func calculateStats(events *ReplayEvents, gameEvents []GameEventI) {
 	var score, fcScore, maxScore int32
 	var maxCombo, maxLeftCombo, maxRightCombo int32
 	var currentCombo, currentLeftCombo, currentRightCombo int32
-	for _, gameEvent := range gameEvents {
+	for i, gameEvent := range gameEvents {
 		gameEventScore := int32(gameEvent.GetScore())
 		score += gameEventScore * int32(multiplier.Value())
 		maxScore += int32(gameEvent.GetMaxScore()) * int32(maxMultiplier.Value())
@@ -256,6 +296,11 @@ func calculateStats(events *ReplayEvents, gameEvents []GameEventI) {
 			} else {
 				fcScore += BlockMaxValue * int32(maxMultiplier.Value())
 			}
+		}
+
+		if maxScore > 0 {
+			gameEvents[i].SetAccuracy(float64(score) / float64(maxScore) * 100)
+			gameEvents[i].SetFcAccuracy(float64(fcScore) / float64(maxScore) * 100)
 		}
 
 		maxMultiplier.Inc()
@@ -369,19 +414,19 @@ func NewReplayEvents(replay *Replay) *ReplayEvents {
 			}
 
 			events.Hits = append(events.Hits, noteEvent)
-			gameEvents = append(gameEvents, &noteEvent)
+			gameEvents = append(gameEvents, &events.Hits[len(events.Hits)-1])
 		case Bad:
 			badCut := BadCutEvent{GameEvent: gameEvent, TimeDependence: timeDependence}
 			events.BadCuts = append(events.BadCuts, badCut)
-			gameEvents = append(gameEvents, &badCut)
+			gameEvents = append(gameEvents, &events.BadCuts[len(events.BadCuts)-1])
 		case Miss:
 			missedNote := MissedNoteEvent{GameEvent: gameEvent}
 			events.Misses = append(events.Misses, missedNote)
-			gameEvents = append(gameEvents, &missedNote)
+			gameEvents = append(gameEvents, &events.Misses[len(events.Misses)-1])
 		case Bomb:
 			bombHit := BombHitEvent{GameEvent: gameEvent}
 			events.BombHits = append(events.BombHits, bombHit)
-			gameEvents = append(gameEvents, &bombHit)
+			gameEvents = append(gameEvents, &events.BombHits[len(events.BombHits)-1])
 		}
 	}
 
@@ -390,7 +435,7 @@ func NewReplayEvents(replay *Replay) *ReplayEvents {
 	for i := range replay.Walls {
 		wallHitEvent := WallHitEvent{EventIdx: int32(i) + int32(numOfNotes), WallHit: replay.Walls[i]}
 		events.Walls = append(events.Walls, wallHitEvent)
-		gameEvents = append(gameEvents, &wallHitEvent)
+		gameEvents = append(gameEvents, &events.Walls[len(events.Walls)-1])
 	}
 
 	if len(replay.Frames) > 0 {
