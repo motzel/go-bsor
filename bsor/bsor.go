@@ -180,6 +180,7 @@ type ColorType byte
 const (
 	Red ColorType = iota
 	Blue
+	NoColor = 255
 )
 
 func (s ColorType) String() string {
@@ -188,6 +189,8 @@ func (s ColorType) String() string {
 		return "Red"
 	case Blue:
 		return "Blue"
+	case NoColor:
+		return "NoColor"
 	default:
 		return "Unknown"
 	}
@@ -304,7 +307,7 @@ func Read(reader io.Reader) (*Replay, error) {
 	var err error
 
 	if err = readHeader(reader, &replay.Header); err != nil {
-		return &replay, wrapError(err)
+		return nil, wrapError(err)
 	}
 
 	for {
@@ -337,7 +340,7 @@ func Read(reader io.Reader) (*Replay, error) {
 			err = readWholeSlice(reader, &replay.Pauses)
 
 		default:
-			return &replay, wrapError(ErrUnknownPart)
+			return nil, wrapError(ErrUnknownPart)
 		}
 
 		if err != nil {

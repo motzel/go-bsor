@@ -1,60 +1,16 @@
 package bsor
 
 import (
-	"github.com/motzel/go-bsor/buffer"
-	"github.com/motzel/go-bsor/utils"
-	"math"
+	"github.com/motzel/go-bsor/bsor/buffer"
+	"github.com/motzel/go-bsor/bsor/utils"
 )
 
 const BlockMaxValue = 115
 
-func GetMaxScore(blocks int, maxScorePerBlock int) int {
-	var score int
-
-	if blocks >= 14 {
-		score += 8 * maxScorePerBlock * (blocks - 13)
-	}
-
-	if blocks >= 6 {
-		score += 4 * maxScorePerBlock * (int(math.Min(float64(blocks), float64(13))) - 5)
-	}
-
-	if blocks >= 2 {
-		score += 2 * maxScorePerBlock * (int(math.Min(float64(blocks), float64(5))) - 1)
-	}
-
-	score += maxScorePerBlock * int(math.Min(float64(blocks), float64(1)))
-
-	return int(math.Floor(float64(score)))
-}
-
 type StatInfo struct {
-	ModVersion     string   `json:"modVersion"`
-	GameVersion    string   `json:"gameVersion"`
-	Timestamp      uint32   `json:"timestamp"`
-	PlayerId       string   `json:"playerId"`
-	PlayerName     string   `json:"playerName"`
-	Platform       string   `json:"platform"`
-	TrackingSystem string   `json:"trackingSystem"`
-	Hmd            string   `json:"hmd"`
-	Controller     string   `json:"controller"`
-	Hash           string   `json:"hash"`
-	SongName       string   `json:"songName"`
-	Mapper         string   `json:"mapper"`
-	Difficulty     string   `json:"difficulty"`
-	Score          int32    `json:"score"`
-	Mode           string   `json:"mode"`
-	Environment    string   `json:"environment"`
-	Modifiers      []string `json:"modifiers"`
-	JumpDistance   float32  `json:"jumpDistance"`
-	LeftHanded     bool     `json:"leftHanded"`
-	Height         float32  `json:"height"`
-	StartTime      float32  `json:"startTime"`
-	FailTime       float32  `json:"failTime"`
-	Speed          float32  `json:"speed"`
-	Accuracy       float64  `json:"accuracy"`
-	WallHit        int      `json:"wallHit"`
-	Pauses         int      `json:"pauses"`
+	ReplayEventsInfo
+	WallHit int `json:"wallHit"`
+	Pauses  int `json:"pauses"`
 }
 
 type HandStat struct {
@@ -129,7 +85,7 @@ type StatBuffer struct {
 	BombHits       int
 }
 
-func (buf *StatBuffer) add(goodNoteCut *GoodCutEvent) {
+func (buf *StatBuffer) add(goodNoteCut *GoodNoteCutEvent) {
 	score := goodNoteCut.AccCut + goodNoteCut.BeforeCut + goodNoteCut.AfterCut
 
 	if goodNoteCut.EventType == Good {
@@ -161,38 +117,38 @@ func (buf *StatBuffer) add(goodNoteCut *GoodCutEvent) {
 
 func (buf *StatBuffer) stat() *HandStat {
 	stat := &HandStat{
-		MinAccCut:            utils.SliceMin[uint16](buf.AccCut.Values),
+		MinAccCut:            buf.AccCut.Min(),
 		AvgAccCut:            buf.AccCut.Avg(),
 		MedianAccCut:         buf.AccCut.Median(),
-		MaxAccCut:            utils.SliceMax[uint16](buf.AccCut.Values),
-		MinBeforeCut:         utils.SliceMin[uint16](buf.BeforeCut.Values),
+		MaxAccCut:            buf.AccCut.Max(),
+		MinBeforeCut:         buf.BeforeCut.Min(),
 		AvgBeforeCut:         buf.BeforeCut.Avg(),
 		MedianBeforeCut:      buf.BeforeCut.Median(),
-		MaxBeforeCut:         utils.SliceMax[uint16](buf.BeforeCut.Values),
-		MinAfterCut:          utils.SliceMin[uint16](buf.AfterCut.Values),
+		MaxBeforeCut:         buf.BeforeCut.Max(),
+		MinAfterCut:          buf.AfterCut.Min(),
 		AvgAfterCut:          buf.AfterCut.Avg(),
 		MedianAfterCut:       buf.AfterCut.Median(),
-		MaxAfterCut:          utils.SliceMax[uint16](buf.AfterCut.Values),
-		MinScore:             utils.SliceMin[uint16](buf.Score.Values),
+		MaxAfterCut:          buf.AfterCut.Max(),
+		MinScore:             buf.Score.Min(),
 		AvgScore:             buf.Score.Avg(),
 		MedianScore:          buf.Score.Median(),
-		MaxScore:             utils.SliceMax[uint16](buf.Score.Values),
-		MinTimeDependence:    utils.SliceMin[float64](buf.TimeDependence.Values),
+		MaxScore:             buf.Score.Max(),
+		MinTimeDependence:    buf.TimeDependence.Min(),
 		AvgTimeDependence:    buf.TimeDependence.Avg(),
 		MedianTimeDependence: buf.TimeDependence.Median(),
-		MaxTimeDependence:    utils.SliceMax[float64](buf.TimeDependence.Values),
-		MinPreSwing:          utils.SliceMin[float64](buf.PreSwing.Values),
+		MaxTimeDependence:    buf.TimeDependence.Max(),
+		MinPreSwing:          buf.PreSwing.Min() * 100,
 		AvgPreSwing:          buf.PreSwing.Avg() * 100,
 		MedianPreSwing:       buf.PreSwing.Median() * 100,
-		MaxPreswing:          utils.SliceMax[float64](buf.PreSwing.Values) * 100,
-		MinPostSwing:         utils.SliceMin[float64](buf.PostSwing.Values),
+		MaxPreswing:          buf.PreSwing.Max() * 100,
+		MinPostSwing:         buf.PostSwing.Min() * 100,
 		AvgPostSwing:         buf.PostSwing.Avg() * 100,
 		MedianPostSwing:      buf.PostSwing.Median() * 100,
-		MaxPostSwing:         utils.SliceMax[float64](buf.PostSwing.Values) * 100,
-		MinGrid:              utils.SliceMap[buffer.Buffer[uint16, int64], uint16](buf.Grid, func(buf buffer.Buffer[uint16, int64]) uint16 { return utils.SliceMin[uint16](buf.Values) }),
+		MaxPostSwing:         buf.PostSwing.Max() * 100,
+		MinGrid:              utils.SliceMap[buffer.Buffer[uint16, int64], uint16](buf.Grid, func(buf buffer.Buffer[uint16, int64]) uint16 { return buf.Min() }),
 		AvgGrid:              utils.SliceMap[buffer.Buffer[uint16, int64], float64](buf.Grid, func(buf buffer.Buffer[uint16, int64]) float64 { return buf.Avg() }),
 		MedianGrid:           utils.SliceMap[buffer.Buffer[uint16, int64], uint16](buf.Grid, func(buf buffer.Buffer[uint16, int64]) uint16 { return buf.Median() }),
-		MaxGrid:              utils.SliceMap[buffer.Buffer[uint16, int64], uint16](buf.Grid, func(buf buffer.Buffer[uint16, int64]) uint16 { return utils.SliceMax[uint16](buf.Values) }),
+		MaxGrid:              utils.SliceMap[buffer.Buffer[uint16, int64], uint16](buf.Grid, func(buf buffer.Buffer[uint16, int64]) uint16 { return buf.Max() }),
 		Notes:                buf.Notes,
 		Misses:               buf.Misses,
 		BadCuts:              buf.BadCuts,
@@ -226,31 +182,11 @@ func newStatBuffer(length int) *StatBuffer {
 	}
 }
 
-func newStatInfo(info *Info) *StatInfo {
+func newStatInfo(info *ReplayEventsInfo) *StatInfo {
 	return &StatInfo{
-		ModVersion:     info.ModVersion,
-		GameVersion:    info.GameVersion,
-		Timestamp:      info.Timestamp,
-		PlayerId:       info.PlayerId,
-		PlayerName:     info.PlayerName,
-		Platform:       info.Platform,
-		TrackingSystem: info.TrackingSystem,
-		Hmd:            info.Hmd,
-		Controller:     info.Controller,
-		Hash:           info.Hash,
-		SongName:       info.SongName,
-		Mapper:         info.Mapper,
-		Difficulty:     info.Difficulty,
-		Score:          info.Score,
-		Mode:           info.Mode,
-		Environment:    info.Environment,
-		Modifiers:      info.Modifiers,
-		JumpDistance:   info.JumpDistance,
-		LeftHanded:     info.LeftHanded,
-		Height:         info.Height,
-		StartTime:      info.StartTime,
-		FailTime:       info.FailTime,
-		Speed:          info.Speed,
+		ReplayEventsInfo: *info,
+		WallHit:          0,
+		Pauses:           0,
 	}
 }
 
@@ -352,11 +288,6 @@ func NewReplayStats(replay *ReplayEvents) *ReplayStats {
 	replayStats.Stats.Left = *leftBuf.stat()
 	replayStats.Stats.Right = *rightBuf.stat()
 	replayStats.Stats.Total = *totalBuf.stat()
-
-	maxScore := GetMaxScore(replayStats.Stats.Total.Notes, BlockMaxValue)
-	if maxScore > 0 {
-		replayStats.Info.Accuracy = float64(replayStats.Info.Score) / float64(maxScore) * 100
-	}
 
 	replayStats.Info.Pauses = len(replay.Pauses)
 	replayStats.Info.WallHit = len(replay.Walls)
