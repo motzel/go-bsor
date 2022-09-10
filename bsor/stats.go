@@ -6,26 +6,35 @@ import (
 )
 
 const BlockMaxValue = 115
+const GridBufferSize = 4 * 3 // lines * layers
 
-type StatInfo struct {
-	ReplayEventsInfo
-	WallHit int `json:"wallHit"`
-	Pauses  int `json:"pauses"`
+type CutBuffer = buffer.Buffer[CutValue, CutValueSum]
+type SwingBuffer = buffer.Buffer[SwingValue, SwingValueSum]
+
+type ReplayStatsInfo struct {
+	Info
+	EndTime    TimeValue  `json:"endTime"`
+	Accuracy   SwingValue `json:"accuracy"`
+	FcAccuracy SwingValue `json:"fcAccuracy"`
+	CalcScore  Counter    `json:"calcScore"`
+	WallHits   Counter    `json:"wallHits"`
+	Pauses     Counter    `json:"pauses"`
 }
 
 type HandStat struct {
-	AccCut         buffer.Stats[uint16]      `json:"accCut"`
-	BeforeCut      buffer.Stats[uint16]      `json:"beforeCut"`
-	AfterCut       buffer.Stats[uint16]      `json:"afterCut"`
-	Score          buffer.Stats[uint16]      `json:"score"`
-	TimeDependence buffer.Stats[float64]     `json:"timeDependence"`
-	PreSwing       buffer.Stats[float64]     `json:"preSwing"`
-	PostSwing      buffer.Stats[float64]     `json:"postSwing"`
-	Grid           buffer.StatsSlice[uint16] `json:"grid"`
-	Notes          int                       `json:"notes"`
-	Misses         int                       `json:"misses"`
-	BadCuts        int                       `json:"badCuts"`
-	BombHits       int                       `json:"bombHit"`
+	AccCut         buffer.Stats[CutValue]      `json:"accCut"`
+	BeforeCut      buffer.Stats[CutValue]      `json:"beforeCut"`
+	AfterCut       buffer.Stats[CutValue]      `json:"afterCut"`
+	Score          buffer.Stats[CutValue]      `json:"score"`
+	TimeDependence buffer.Stats[SwingValue]    `json:"timeDependence"`
+	PreSwing       buffer.Stats[SwingValue]    `json:"preSwing"`
+	PostSwing      buffer.Stats[SwingValue]    `json:"postSwing"`
+	Grid           buffer.StatsSlice[CutValue] `json:"grid"`
+	Notes          Counter                     `json:"notes"`
+	Misses         Counter                     `json:"misses"`
+	BadCuts        Counter                     `json:"badCuts"`
+	BombHits       Counter                     `json:"bombHits"`
+	MaxCombo       Counter                     `json:"maxCombo"`
 }
 
 type Stats struct {
@@ -35,23 +44,23 @@ type Stats struct {
 }
 
 type ReplayStats struct {
-	Info  StatInfo `json:"info"`
-	Stats Stats    `json:"stats"`
+	Info  ReplayStatsInfo `json:"info"`
+	Stats Stats           `json:"stats"`
 }
 
 type StatBuffer struct {
-	AccCut         buffer.Buffer[uint16, int64]
-	BeforeCut      buffer.Buffer[uint16, int64]
-	AfterCut       buffer.Buffer[uint16, int64]
-	Score          buffer.Buffer[uint16, int64]
-	TimeDependence buffer.Buffer[float64, float64]
-	PreSwing       buffer.Buffer[float64, float64]
-	PostSwing      buffer.Buffer[float64, float64]
-	Grid           []buffer.Buffer[uint16, int64]
-	Notes          int
-	Misses         int
-	BadCuts        int
-	BombHits       int
+	AccCut         CutBuffer
+	BeforeCut      CutBuffer
+	AfterCut       CutBuffer
+	Score          CutBuffer
+	TimeDependence SwingBuffer
+	PreSwing       SwingBuffer
+	PostSwing      SwingBuffer
+	Grid           []CutBuffer
+	Notes          Counter
+	Misses         Counter
+	BadCuts        Counter
+	BombHits       Counter
 }
 
 func (buf *StatBuffer) add(goodNoteCut *GoodNoteCutEvent) {
@@ -59,19 +68,19 @@ func (buf *StatBuffer) add(goodNoteCut *GoodNoteCutEvent) {
 
 	if goodNoteCut.EventType == Good {
 		if goodNoteCut.ScoringType != SliderTail && goodNoteCut.ScoringType != BurstSliderElement {
-			buf.BeforeCut.Add(uint16(goodNoteCut.BeforeCut))
-			buf.PreSwing.Add(float64(goodNoteCut.BeforeCutRating))
+			buf.BeforeCut.Add(goodNoteCut.BeforeCut)
+			buf.PreSwing.Add(goodNoteCut.BeforeCutRating)
 		}
 
 		if goodNoteCut.ScoringType != BurstSliderHead && goodNoteCut.ScoringType != BurstSliderElement {
-			buf.AccCut.Add(uint16(goodNoteCut.AccCut))
-			buf.Score.Add(uint16(score))
-			buf.TimeDependence.Add(float64(goodNoteCut.TimeDependence))
+			buf.AccCut.Add(goodNoteCut.AccCut)
+			buf.Score.Add(score)
+			buf.TimeDependence.Add(goodNoteCut.TimeDependence)
 		}
 
 		if goodNoteCut.ScoringType != SliderHead && goodNoteCut.ScoringType != BurstSliderHead && goodNoteCut.ScoringType != BurstSliderElement {
-			buf.AfterCut.Add(uint16(goodNoteCut.AfterCut))
-			buf.PostSwing.Add(float64(goodNoteCut.AfterCutRating))
+			buf.AfterCut.Add(goodNoteCut.AfterCut)
+			buf.PostSwing.Add(goodNoteCut.AfterCutRating)
 		}
 
 		if goodNoteCut.ScoringType != BurstSliderHead && goodNoteCut.ScoringType != BurstSliderElement {
@@ -79,13 +88,13 @@ func (buf *StatBuffer) add(goodNoteCut *GoodNoteCutEvent) {
 			if index < 0 || index > 11 {
 				index = 0
 			}
-			buf.Grid[index].Add(uint16(score))
+			buf.Grid[index].Add(score)
 		}
 	}
 }
 
 func (buf *StatBuffer) stat() *HandStat {
-	stat := &HandStat{
+	return &HandStat{
 		AccCut:         buf.AccCut.Stats(),
 		BeforeCut:      buf.BeforeCut.Stats(),
 		AfterCut:       buf.AfterCut.Stats(),
@@ -93,48 +102,41 @@ func (buf *StatBuffer) stat() *HandStat {
 		TimeDependence: buf.TimeDependence.Stats(),
 		PreSwing:       buf.PreSwing.Stats(),
 		PostSwing:      buf.PostSwing.Stats(),
-		Grid: buffer.StatsSlice[uint16]{
-			Min:    utils.SliceMap[buffer.Buffer[uint16, int64], uint16](buf.Grid, func(buf buffer.Buffer[uint16, int64]) uint16 { return buf.Min() }),
-			Avg:    utils.SliceMap[buffer.Buffer[uint16, int64], float64](buf.Grid, func(buf buffer.Buffer[uint16, int64]) float64 { return buf.Avg() }),
-			Median: utils.SliceMap[buffer.Buffer[uint16, int64], uint16](buf.Grid, func(buf buffer.Buffer[uint16, int64]) uint16 { return buf.Median() }),
-			Max:    utils.SliceMap[buffer.Buffer[uint16, int64], uint16](buf.Grid, func(buf buffer.Buffer[uint16, int64]) uint16 { return buf.Max() }),
+		Grid: buffer.StatsSlice[CutValue]{
+			Min:    utils.SliceMap[CutBuffer, CutValue](buf.Grid, func(buf CutBuffer) CutValue { return buf.Min() }),
+			Avg:    utils.SliceMap[CutBuffer, SwingValue](buf.Grid, func(buf CutBuffer) SwingValue { return buf.Avg() }),
+			Median: utils.SliceMap[CutBuffer, CutValue](buf.Grid, func(buf CutBuffer) CutValue { return buf.Median() }),
+			Max:    utils.SliceMap[CutBuffer, CutValue](buf.Grid, func(buf CutBuffer) CutValue { return buf.Max() }),
 		},
 		Notes:    buf.Notes,
 		Misses:   buf.Misses,
 		BadCuts:  buf.BadCuts,
 		BombHits: buf.BombHits,
 	}
-
-	return stat
 }
 
 func newStatBuffer(length int) *StatBuffer {
-	accCutBuffer := buffer.NewBuffer[uint16, int64](length)
-	beforeCutBuffer := buffer.NewBuffer[uint16, int64](length)
-	afterCutBuffer := buffer.NewBuffer[uint16, int64](length)
-	accBuffer := buffer.NewBuffer[uint16, int64](length)
-
-	gridBuffer := [12]buffer.Buffer[uint16, int64]{}
-
 	return &StatBuffer{
-		AccCut:    accCutBuffer,
-		BeforeCut: beforeCutBuffer,
-		AfterCut:  afterCutBuffer,
-		Score:     accBuffer,
-		Grid: utils.SliceMap[buffer.Buffer[uint16, int64], buffer.Buffer[uint16, int64]](
-			gridBuffer[:],
-			func(buf buffer.Buffer[uint16, int64]) buffer.Buffer[uint16, int64] {
-				return buffer.NewBuffer[uint16, int64](length)
-			},
-		),
+		AccCut:         buffer.NewBuffer[CutValue, CutValueSum](length),
+		BeforeCut:      buffer.NewBuffer[CutValue, CutValueSum](length),
+		AfterCut:       buffer.NewBuffer[CutValue, CutValueSum](length),
+		Score:          buffer.NewBuffer[CutValue, CutValueSum](length),
+		TimeDependence: buffer.NewBuffer[SwingValue, SwingValueSum](length),
+		PreSwing:       buffer.NewBuffer[SwingValue, SwingValueSum](length),
+		PostSwing:      buffer.NewBuffer[SwingValue, SwingValueSum](length),
+		Grid:           buffer.NewBufferSlice[CutValue, CutValueSum](GridBufferSize, length),
 	}
 }
 
-func newStatInfo(info *ReplayEventsInfo) *StatInfo {
-	return &StatInfo{
-		ReplayEventsInfo: *info,
-		WallHit:          0,
-		Pauses:           0,
+func newStatInfo(info *ReplayEventsInfo) *ReplayStatsInfo {
+	return &ReplayStatsInfo{
+		Info:       info.Info,
+		EndTime:    info.EndTime,
+		Accuracy:   info.Accuracy,
+		FcAccuracy: info.FcAccuracy,
+		CalcScore:  info.CalcScore,
+		WallHits:   0,
+		Pauses:     0,
 	}
 }
 
@@ -237,8 +239,12 @@ func NewReplayStats(replay *ReplayEvents) *ReplayStats {
 	replayStats.Stats.Right = *rightBuf.stat()
 	replayStats.Stats.Total = *totalBuf.stat()
 
+	replayStats.Stats.Left.MaxCombo = replay.Info.MaxLeftCombo
+	replayStats.Stats.Right.MaxCombo = replay.Info.MaxRightCombo
+	replayStats.Stats.Total.MaxCombo = replay.Info.MaxCombo
+
 	replayStats.Info.Pauses = len(replay.Pauses)
-	replayStats.Info.WallHit = len(replay.Walls)
+	replayStats.Info.WallHits = len(replay.Walls)
 
 	return replayStats
 }

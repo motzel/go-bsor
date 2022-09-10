@@ -199,7 +199,7 @@ func (s ColorType) String() string {
 type CutDirection byte
 
 const (
-	TopCenter = iota
+	TopCenter CutDirection = iota
 	BottomCenter
 	MiddleLeft
 	MiddleRight
@@ -595,7 +595,7 @@ func readStringWithLength(reader io.Reader, length int) (str string, err error) 
 	return string(stringBytes), nil
 }
 
-func fixStringSize(reader io.Reader, size int32) (int32, error) {
+func skipResidualsOfIncorrectPreviousStringLength(reader io.Reader, size int32) (int32, error) {
 	bytes := make([]byte, 4)
 	byteOrder.PutUint32(bytes[0:], uint32(size))
 
@@ -609,7 +609,7 @@ func fixStringSize(reader io.Reader, size int32) (int32, error) {
 
 	size = int32(byteOrder.Uint32(bytes))
 	if size > 1000 || size < 0 {
-		return fixStringSize(reader, size)
+		return skipResidualsOfIncorrectPreviousStringLength(reader, size)
 	}
 
 	return size, nil
@@ -622,7 +622,7 @@ func readString(reader io.Reader) (str string, err error) {
 	}
 
 	if size > 1000 || size < 0 {
-		if size, err = fixStringSize(reader, size); err != nil {
+		if size, err = skipResidualsOfIncorrectPreviousStringLength(reader, size); err != nil {
 			return "", err
 		}
 	}

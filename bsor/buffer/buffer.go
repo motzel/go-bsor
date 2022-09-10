@@ -95,6 +95,16 @@ func NewBuffer[T constraints.NumericValue, S constraints.Sum](length int) Buffer
 	return Buffer[T, S]{values: make([]T, 0, length), sum: 0}
 }
 
+func NewBufferSlice[T constraints.NumericValue, S constraints.Sum](num, length int) []Buffer[T, S] {
+	bufferSlice := make([]Buffer[T, S], num)
+
+	for i := range bufferSlice {
+		bufferSlice[i] = NewBuffer[T, S](length)
+	}
+
+	return bufferSlice
+}
+
 type CircularBuffer[T constraints.NumericValue, S constraints.Sum] struct {
 	Buffer[T, S]
 	position int

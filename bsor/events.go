@@ -9,15 +9,15 @@ import (
 const fcBufferSize = 5
 
 type NoteRating struct {
-	CutDistanceToCenter float32 `json:"cutDistanceToCenter"`
-	BeforeCutRating     float32 `json:"beforeCutRating"`
-	AfterCutRating      float32 `json:"afterCutRating"`
+	CutDistanceToCenter SwingValue `json:"cutDistanceToCenter"`
+	BeforeCutRating     SwingValue `json:"beforeCutRating"`
+	AfterCutRating      SwingValue `json:"afterCutRating"`
 }
 
 type NoteScore struct {
-	BeforeCut byte `json:"beforeCut"`
-	AfterCut  byte `json:"afterCut"`
-	AccCut    byte `json:"accCut"`
+	BeforeCut CutValue `json:"beforeCut"`
+	AfterCut  CutValue `json:"afterCut"`
+	AccCut    CutValue `json:"accCut"`
 }
 
 func getNoteScore(eventType NoteEventType, scoringType NoteScoringType, cutInfo NoteRating) NoteScore {
@@ -28,21 +28,21 @@ func getNoteScore(eventType NoteEventType, scoringType NoteScoringType, cutInfo 
 		if scoringType == SliderTail {
 			score.BeforeCut = 70
 		} else if scoringType != BurstSliderElement {
-			score.BeforeCut = byte(math.Round(clamp(float64(cutInfo.BeforeCutRating*70), 0, 70)))
+			score.BeforeCut = CutValue(math.Round(clamp(float64(cutInfo.BeforeCutRating*70), 0, 70)))
 		}
 
 		score.AfterCut = 0
 		if scoringType == SliderHead {
 			score.AfterCut = 30
 		} else if scoringType != BurstSliderElement && scoringType != BurstSliderHead {
-			score.AfterCut = byte(math.Round(clamp(float64(cutInfo.AfterCutRating*30), 0, 30)))
+			score.AfterCut = CutValue(math.Round(clamp(float64(cutInfo.AfterCutRating*30), 0, 30)))
 		}
 
 		score.AccCut = 0
 		if scoringType == BurstSliderElement {
 			score.AccCut = 20
 		} else {
-			score.AccCut = byte(math.Round(15 * (1 - clamp(float64(cutInfo.CutDistanceToCenter/0.3), 0, 1))))
+			score.AccCut = CutValue(math.Round(15 * (1 - clamp(float64(cutInfo.CutDistanceToCenter/0.3), 0, 1))))
 		}
 	}
 
@@ -50,38 +50,38 @@ func getNoteScore(eventType NoteEventType, scoringType NoteScoringType, cutInfo 
 }
 
 type GameEventI interface {
-	GetIdx() int32
-	GetTime() float32
+	GetIdx() Counter
+	GetTime() TimeValue
 	GetColor() ColorType
-	GetScore() byte
-	GetMaxScore() byte
+	GetScore() CutValue
+	GetMaxScore() CutValue
 	DecreasesCombo() bool
 	IsNote() bool
-	GetAccuracy() float64
-	SetAccuracy(acc float64)
-	GetFcAccuracy() float64
-	SetFcAccuracy(acc float64)
+	GetAccuracy() SwingValue
+	SetAccuracy(acc SwingValue)
+	GetFcAccuracy() SwingValue
+	SetFcAccuracy(acc SwingValue)
 }
 
 type GameEvent struct {
-	EventIdx     int32           `json:"-"`
+	EventIdx     Counter         `json:"-"`
 	EventType    NoteEventType   `json:"eventType"`
 	ScoringType  NoteScoringType `json:"scoringType"`
 	LineIdx      byte            `json:"lineIdx"`
 	LineLayer    byte            `json:"lineLayer"`
 	ColorType    ColorType       `json:"colorType"`
 	CutDirection CutDirection    `json:"cutDirection"`
-	EventTime    float32         `json:"eventTime"`
-	Accuracy     float64         `json:"accuracy"`
-	FcAccuracy   float64         `json:"fcAccuracy"`
+	EventTime    TimeValue       `json:"eventTime"`
+	Accuracy     SwingValue      `json:"accuracy"`
+	FcAccuracy   SwingValue      `json:"fcAccuracy"`
 	GameEventI   `json:"-"`
 }
 
-func (gameEvent *GameEvent) GetIdx() int32 {
+func (gameEvent *GameEvent) GetIdx() Counter {
 	return gameEvent.EventIdx
 }
 
-func (gameEvent *GameEvent) GetTime() float32 {
+func (gameEvent *GameEvent) GetTime() TimeValue {
 	return gameEvent.EventTime
 }
 
@@ -89,11 +89,11 @@ func (gameEvent *GameEvent) GetColor() ColorType {
 	return gameEvent.ColorType
 }
 
-func (gameEvent *GameEvent) GetScore() byte {
+func (gameEvent *GameEvent) GetScore() CutValue {
 	return 0
 }
 
-func (gameEvent *GameEvent) GetMaxScore() byte {
+func (gameEvent *GameEvent) GetMaxScore() CutValue {
 	switch gameEvent.ScoringType {
 	case BurstSliderHead:
 		return 85
@@ -112,30 +112,30 @@ func (gameEvent *GameEvent) IsNote() bool {
 	return false
 }
 
-func (gameEvent *GameEvent) GetAccuracy() float64 {
+func (gameEvent *GameEvent) GetAccuracy() SwingValue {
 	return gameEvent.Accuracy
 }
 
-func (gameEvent *GameEvent) SetAccuracy(acc float64) {
+func (gameEvent *GameEvent) SetAccuracy(acc SwingValue) {
 	gameEvent.Accuracy = acc
 }
 
-func (gameEvent *GameEvent) GetFcAccuracy() float64 {
+func (gameEvent *GameEvent) GetFcAccuracy() SwingValue {
 	return gameEvent.FcAccuracy
 }
 
-func (gameEvent *GameEvent) SetFcAccuracy(acc float64) {
+func (gameEvent *GameEvent) SetFcAccuracy(acc SwingValue) {
 	gameEvent.FcAccuracy = acc
 }
 
 type GoodNoteCutEvent struct {
 	GameEvent
-	TimeDependence float32 `json:"timeDependence"`
+	TimeDependence SwingValue `json:"timeDependence"`
 	NoteRating
 	NoteScore
 }
 
-func (note *GoodNoteCutEvent) GetScore() byte {
+func (note *GoodNoteCutEvent) GetScore() CutValue {
 	if note.EventType == Good {
 		score := getNoteScore(
 			note.EventType,
@@ -167,7 +167,7 @@ func (note *MissedNoteEvent) IsNote() bool {
 
 type BadCutEvent struct {
 	GameEvent
-	TimeDependence float32 `json:"timeDependence"`
+	TimeDependence SwingValue `json:"timeDependence"`
 }
 
 func (note *BadCutEvent) IsNote() bool {
@@ -179,14 +179,14 @@ type BombHitEvent struct {
 }
 
 type WallHitEvent struct {
-	EventIdx   int32   `json:"-"`
-	Accuracy   float64 `json:"accuracy"`
-	FcAccuracy float64 `json:"fcAccuracy"`
+	EventIdx   Counter    `json:"-"`
+	Accuracy   SwingValue `json:"accuracy"`
+	FcAccuracy SwingValue `json:"fcAccuracy"`
 	WallHit
 	GameEventI `json:"-"`
 }
 
-func (wallHit *WallHitEvent) GetIdx() int32 {
+func (wallHit *WallHitEvent) GetIdx() Counter {
 	return wallHit.EventIdx
 }
 
@@ -194,15 +194,15 @@ func (wallHit *WallHitEvent) IsNote() bool {
 	return false
 }
 
-func (wallHit *WallHitEvent) GetTime() float32 {
+func (wallHit *WallHitEvent) GetTime() TimeValue {
 	return wallHit.Time
 }
 
-func (wallHit *WallHitEvent) GetMaxScore() byte {
+func (wallHit *WallHitEvent) GetMaxScore() CutValue {
 	return 0
 }
 
-func (wallHit *WallHitEvent) GetScore() byte {
+func (wallHit *WallHitEvent) GetScore() CutValue {
 	return 0
 }
 
@@ -214,32 +214,33 @@ func (wallHit *WallHitEvent) GetColor() ColorType {
 	return NoColor
 }
 
-func (wallHit *WallHitEvent) GetAccuracy() float64 {
+func (wallHit *WallHitEvent) GetAccuracy() SwingValue {
 	return wallHit.Accuracy
 }
 
-func (wallHit *WallHitEvent) SetAccuracy(acc float64) {
+func (wallHit *WallHitEvent) SetAccuracy(acc SwingValue) {
 	wallHit.Accuracy = acc
 }
 
-func (wallHit *WallHitEvent) GetFcAccuracy() float64 {
+func (wallHit *WallHitEvent) GetFcAccuracy() SwingValue {
 	return wallHit.FcAccuracy
 }
 
-func (wallHit *WallHitEvent) SetFcAccuracy(acc float64) {
+func (wallHit *WallHitEvent) SetFcAccuracy(acc SwingValue) {
 	wallHit.FcAccuracy = acc
 }
 
 type ReplayEventsInfo struct {
 	Info
-	EndTime       float32 `json:"endTime"`
-	Accuracy      float64 `json:"accuracy"`
-	FcAccuracy    float64 `json:"fcAccuracy"`
-	CalcScore     int32   `json:"calcScore"`
-	MaxCombo      int32   `json:"maxCombo"`
-	MaxLeftCombo  int32   `json:"maxLeftCombo"`
-	MaxRightCombo int32   `json:"maxRightCombo"`
+	EndTime       TimeValue  `json:"endTime"`
+	Accuracy      SwingValue `json:"accuracy"`
+	FcAccuracy    SwingValue `json:"fcAccuracy"`
+	CalcScore     Counter    `json:"calcScore"`
+	MaxCombo      Counter    `json:"maxCombo"`
+	MaxLeftCombo  Counter    `json:"maxLeftCombo"`
+	MaxRightCombo Counter    `json:"maxRightCombo"`
 }
+
 type ReplayEvents struct {
 	Info     ReplayEventsInfo   `json:"info"`
 	Hits     []GoodNoteCutEvent `json:"notes"`
@@ -267,40 +268,40 @@ func calculateStats(events *ReplayEvents, gameEvents []GameEventI) {
 		return gameEvents[i].GetTime() < gameEvents[j].GetTime()
 	})
 
-	leftFcBuffer := buffer.NewCircularBuffer[byte, int64](fcBufferSize)
-	rightFcBuffer := buffer.NewCircularBuffer[byte, int64](fcBufferSize)
+	leftFcBuffer := buffer.NewCircularBuffer[CutValue, CutValueSum](fcBufferSize)
+	rightFcBuffer := buffer.NewCircularBuffer[CutValue, CutValueSum](fcBufferSize)
 
-	var score, fcScore, maxScore int32
-	var maxCombo, maxLeftCombo, maxRightCombo int32
-	var currentCombo, currentLeftCombo, currentRightCombo int32
+	var score, fcScore, maxScore Counter
+	var maxCombo, maxLeftCombo, maxRightCombo Counter
+	var currentCombo, currentLeftCombo, currentRightCombo Counter
 	for i, gameEvent := range gameEvents {
-		gameEventScore := int32(gameEvent.GetScore())
-		score += gameEventScore * int32(multiplier.Value())
-		maxScore += int32(gameEvent.GetMaxScore()) * int32(maxMultiplier.Value())
+		gameEventScore := Counter(gameEvent.GetScore())
+		score += gameEventScore * Counter(multiplier.Value())
+		maxScore += Counter(gameEvent.GetMaxScore()) * Counter(maxMultiplier.Value())
 
 		isLeft := (events.Info.LeftHanded && gameEvent.GetColor() == Blue) || (!events.Info.LeftHanded && gameEvent.GetColor() == Red)
 
 		if gameEvent.IsNote() {
 			if gameEventScore > 0 {
 				if isLeft {
-					leftFcBuffer.Add(byte(gameEventScore))
+					leftFcBuffer.Add(CutValue(gameEventScore))
 				} else {
-					rightFcBuffer.Add(byte(gameEventScore))
+					rightFcBuffer.Add(CutValue(gameEventScore))
 				}
 
-				fcScore += gameEventScore * int32(maxMultiplier.Value())
+				fcScore += gameEventScore * Counter(maxMultiplier.Value())
 			} else if isLeft && leftFcBuffer.Size() > 0 {
-				fcScore += int32(math.Round(leftFcBuffer.Avg())) * int32(maxMultiplier.Value())
+				fcScore += Counter(math.Round(leftFcBuffer.Avg())) * Counter(maxMultiplier.Value())
 			} else if !isLeft && rightFcBuffer.Size() > 0 {
-				fcScore += int32(math.Round(rightFcBuffer.Avg())) * int32(maxMultiplier.Value())
+				fcScore += Counter(math.Round(rightFcBuffer.Avg())) * Counter(maxMultiplier.Value())
 			} else {
-				fcScore += BlockMaxValue * int32(maxMultiplier.Value())
+				fcScore += BlockMaxValue * Counter(maxMultiplier.Value())
 			}
 		}
 
 		if maxScore > 0 {
-			gameEvents[i].SetAccuracy(float64(score) / float64(maxScore) * 100)
-			gameEvents[i].SetFcAccuracy(float64(fcScore) / float64(maxScore) * 100)
+			gameEvents[i].SetAccuracy(SwingValue(score) / SwingValue(maxScore) * 100)
+			gameEvents[i].SetFcAccuracy(SwingValue(fcScore) / SwingValue(maxScore) * 100)
 		}
 
 		maxMultiplier.Inc()
@@ -363,11 +364,11 @@ func calculateStats(events *ReplayEvents, gameEvents []GameEventI) {
 
 	if maxScore > 0 {
 		if score > 0 {
-			events.Info.Accuracy = float64(score) / float64(maxScore) * 100
+			events.Info.Accuracy = SwingValue(score) / SwingValue(maxScore) * 100
 		} else {
-			events.Info.Accuracy = float64(events.Info.Score) / float64(maxScore) * 100
+			events.Info.Accuracy = SwingValue(events.Info.Score) / SwingValue(maxScore) * 100
 		}
-		events.Info.FcAccuracy = float64(fcScore) / float64(maxScore) * 100
+		events.Info.FcAccuracy = SwingValue(fcScore) / SwingValue(maxScore) * 100
 	}
 }
 
@@ -387,10 +388,10 @@ func NewReplayEvents(replay *Replay) *ReplayEvents {
 	for i := range replay.Notes {
 		note := replay.Notes[i]
 
-		timeDependence := float32(math.Abs(float64(note.CutInfo.CutNormal.Z)))
+		timeDependence := SwingValue(math.Abs(float64(note.CutInfo.CutNormal.Z)))
 
 		gameEvent := GameEvent{
-			EventIdx:     int32(i),
+			EventIdx:     Counter(i),
 			EventType:    note.EventType,
 			ScoringType:  note.ScoringType,
 			LineIdx:      note.LineIdx,
@@ -405,11 +406,11 @@ func NewReplayEvents(replay *Replay) *ReplayEvents {
 			noteEvent := GoodNoteCutEvent{
 				GameEvent:      gameEvent,
 				TimeDependence: timeDependence,
-				NoteRating:     NoteRating{BeforeCutRating: note.CutInfo.BeforeCutRating, AfterCutRating: note.CutInfo.AfterCutRating, CutDistanceToCenter: note.CutInfo.CutDistanceToCenter},
+				NoteRating:     NoteRating{BeforeCutRating: SwingValue(note.CutInfo.BeforeCutRating), AfterCutRating: SwingValue(note.CutInfo.AfterCutRating), CutDistanceToCenter: SwingValue(note.CutInfo.CutDistanceToCenter)},
 				NoteScore: getNoteScore(note.EventType, note.ScoringType, NoteRating{
-					BeforeCutRating:     note.CutInfo.BeforeCutRating,
-					AfterCutRating:      note.CutInfo.AfterCutRating,
-					CutDistanceToCenter: note.CutInfo.CutDistanceToCenter,
+					BeforeCutRating:     SwingValue(note.CutInfo.BeforeCutRating),
+					AfterCutRating:      SwingValue(note.CutInfo.AfterCutRating),
+					CutDistanceToCenter: SwingValue(note.CutInfo.CutDistanceToCenter),
 				}),
 			}
 
@@ -433,7 +434,7 @@ func NewReplayEvents(replay *Replay) *ReplayEvents {
 	numOfNotes := len(replay.Notes)
 
 	for i := range replay.Walls {
-		wallHitEvent := WallHitEvent{EventIdx: int32(i) + int32(numOfNotes), WallHit: replay.Walls[i]}
+		wallHitEvent := WallHitEvent{EventIdx: Counter(i) + Counter(numOfNotes), WallHit: replay.Walls[i]}
 		events.Walls = append(events.Walls, wallHitEvent)
 		gameEvents = append(gameEvents, &events.Walls[len(events.Walls)-1])
 	}
