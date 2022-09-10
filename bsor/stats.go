@@ -5,11 +5,13 @@ import (
 	"github.com/motzel/go-bsor/bsor/utils"
 )
 
-const LayersCount = LayerValue(3)
-const LinesCount = LineValue(4)
-
 const BlockMaxValue = 115
-const GridBufferSize = int(LinesCount) * int(LayersCount)
+
+const LayersCount = 3
+const LinesCount = 4
+const CutDirectionsCount = 9
+const BlockPositionsCount = LinesCount * LayersCount
+const PositionsAndDirectionsCount = BlockPositionsCount * CutDirectionsCount
 
 type BlockPosition byte
 
@@ -63,7 +65,7 @@ func NewBlockPosition(layer LayerValue, line LineValue) BlockPosition {
 	// layers in BS goes from the bottom to the top, let's reverse it
 	index := (LayersCount-1-layer)*LinesCount + line
 
-	if index < 0 || index > (LayersCount*LinesCount-1) {
+	if index < 0 || index > (BlockPositionsCount-1) {
 		index = 0
 	}
 
@@ -84,19 +86,21 @@ type ReplayStatsInfo struct {
 }
 
 type HandStat struct {
-	AccCut         buffer.Stats[CutValue]      `json:"accCut"`
-	BeforeCut      buffer.Stats[CutValue]      `json:"beforeCut"`
-	AfterCut       buffer.Stats[CutValue]      `json:"afterCut"`
-	Score          buffer.Stats[CutValue]      `json:"score"`
-	TimeDependence buffer.Stats[SwingValue]    `json:"timeDependence"`
-	PreSwing       buffer.Stats[SwingValue]    `json:"preSwing"`
-	PostSwing      buffer.Stats[SwingValue]    `json:"postSwing"`
-	Grid           buffer.StatsSlice[CutValue] `json:"grid"`
-	Notes          Counter                     `json:"notes"`
-	Misses         Counter                     `json:"misses"`
-	BadCuts        Counter                     `json:"badCuts"`
-	BombHits       Counter                     `json:"bombHits"`
-	MaxCombo       Counter                     `json:"maxCombo"`
+	AccCut                           buffer.Stats[CutValue]      `json:"accCut"`
+	BeforeCut                        buffer.Stats[CutValue]      `json:"beforeCut"`
+	AfterCut                         buffer.Stats[CutValue]      `json:"afterCut"`
+	Score                            buffer.Stats[CutValue]      `json:"score"`
+	TimeDependence                   buffer.Stats[SwingValue]    `json:"timeDependence"`
+	PreSwing                         buffer.Stats[SwingValue]    `json:"preSwing"`
+	PostSwing                        buffer.Stats[SwingValue]    `json:"postSwing"`
+	BlockPositionGrid                buffer.StatsSlice[CutValue] `json:"blockPositionGrid"`
+	CutDirectionGrid                 buffer.StatsSlice[CutValue] `json:"cutDirectionGrid"`
+	BlockPositionAndCutDirectionGrid buffer.StatsSlice[CutValue] `json:"blockPositionAndCutDirectionGrid"`
+	Notes                            Counter                     `json:"notes"`
+	Misses                           Counter                     `json:"misses"`
+	BadCuts                          Counter                     `json:"badCuts"`
+	BombHits                         Counter                     `json:"bombHits"`
+	MaxCombo                         Counter                     `json:"maxCombo"`
 }
 
 type Stats struct {
@@ -111,18 +115,20 @@ type ReplayStats struct {
 }
 
 type StatBuffer struct {
-	AccCut         CutBuffer
-	BeforeCut      CutBuffer
-	AfterCut       CutBuffer
-	Score          CutBuffer
-	TimeDependence SwingBuffer
-	PreSwing       SwingBuffer
-	PostSwing      SwingBuffer
-	Grid           []CutBuffer
-	Notes          Counter
-	Misses         Counter
-	BadCuts        Counter
-	BombHits       Counter
+	AccCut                           CutBuffer
+	BeforeCut                        CutBuffer
+	AfterCut                         CutBuffer
+	Score                            CutBuffer
+	TimeDependence                   SwingBuffer
+	PreSwing                         SwingBuffer
+	PostSwing                        SwingBuffer
+	BlockPositionGrid                []CutBuffer
+	CutDirectionGrid                 []CutBuffer
+	BlockPositionAndCutDirectionGrid []CutBuffer
+	Notes                            Counter
+	Misses                           Counter
+	BadCuts                          Counter
+	BombHits                         Counter
 }
 
 func (buf *StatBuffer) add(goodNoteCut *GoodNoteCutEvent) {
@@ -146,44 +152,58 @@ func (buf *StatBuffer) add(goodNoteCut *GoodNoteCutEvent) {
 		}
 
 		if goodNoteCut.ScoringType != BurstSliderHead && goodNoteCut.ScoringType != BurstSliderElement {
-			index := NewBlockPosition(goodNoteCut.LineLayer, goodNoteCut.LineIdx)
-			buf.Grid[index].Add(score)
+			positionIndex := int(NewBlockPosition(goodNoteCut.LineLayer, goodNoteCut.LineIdx))
+			directionIndex := int(goodNoteCut.CutDirection)
+			positionAndDirectionIndex := positionIndex*CutDirectionsCount + directionIndex
+
+			buf.BlockPositionGrid[positionIndex].Add(score)
+			buf.CutDirectionGrid[directionIndex].Add(score)
+			buf.BlockPositionAndCutDirectionGrid[positionAndDirectionIndex].Add(score)
 		}
+	}
+}
+
+func getGridStats(gridBuffer []CutBuffer) buffer.StatsSlice[CutValue] {
+	return buffer.StatsSlice[CutValue]{
+		Min:    utils.SliceMap[CutBuffer, CutValue](gridBuffer, func(buf CutBuffer) CutValue { return buf.Min() }),
+		Avg:    utils.SliceMap[CutBuffer, SwingValue](gridBuffer, func(buf CutBuffer) SwingValue { return buf.Avg() }),
+		Median: utils.SliceMap[CutBuffer, CutValue](gridBuffer, func(buf CutBuffer) CutValue { return buf.Median() }),
+		Max:    utils.SliceMap[CutBuffer, CutValue](gridBuffer, func(buf CutBuffer) CutValue { return buf.Max() }),
+		Count:  utils.SliceMap[CutBuffer, int](gridBuffer, func(buf CutBuffer) int { return buf.Length() }),
 	}
 }
 
 func (buf *StatBuffer) stat() *HandStat {
 	return &HandStat{
-		AccCut:         buf.AccCut.Stats(),
-		BeforeCut:      buf.BeforeCut.Stats(),
-		AfterCut:       buf.AfterCut.Stats(),
-		Score:          buf.Score.Stats(),
-		TimeDependence: buf.TimeDependence.Stats(),
-		PreSwing:       buf.PreSwing.Stats(),
-		PostSwing:      buf.PostSwing.Stats(),
-		Grid: buffer.StatsSlice[CutValue]{
-			Min:    utils.SliceMap[CutBuffer, CutValue](buf.Grid, func(buf CutBuffer) CutValue { return buf.Min() }),
-			Avg:    utils.SliceMap[CutBuffer, SwingValue](buf.Grid, func(buf CutBuffer) SwingValue { return buf.Avg() }),
-			Median: utils.SliceMap[CutBuffer, CutValue](buf.Grid, func(buf CutBuffer) CutValue { return buf.Median() }),
-			Max:    utils.SliceMap[CutBuffer, CutValue](buf.Grid, func(buf CutBuffer) CutValue { return buf.Max() }),
-		},
-		Notes:    buf.Notes,
-		Misses:   buf.Misses,
-		BadCuts:  buf.BadCuts,
-		BombHits: buf.BombHits,
+		AccCut:                           buf.AccCut.Stats(),
+		BeforeCut:                        buf.BeforeCut.Stats(),
+		AfterCut:                         buf.AfterCut.Stats(),
+		Score:                            buf.Score.Stats(),
+		TimeDependence:                   buf.TimeDependence.Stats(),
+		PreSwing:                         buf.PreSwing.Stats(),
+		PostSwing:                        buf.PostSwing.Stats(),
+		BlockPositionGrid:                getGridStats(buf.BlockPositionGrid),
+		CutDirectionGrid:                 getGridStats(buf.CutDirectionGrid),
+		BlockPositionAndCutDirectionGrid: getGridStats(buf.BlockPositionAndCutDirectionGrid),
+		Notes:                            buf.Notes,
+		Misses:                           buf.Misses,
+		BadCuts:                          buf.BadCuts,
+		BombHits:                         buf.BombHits,
 	}
 }
 
 func newStatBuffer(length int) *StatBuffer {
 	return &StatBuffer{
-		AccCut:         buffer.NewBuffer[CutValue, CutValueSum](length),
-		BeforeCut:      buffer.NewBuffer[CutValue, CutValueSum](length),
-		AfterCut:       buffer.NewBuffer[CutValue, CutValueSum](length),
-		Score:          buffer.NewBuffer[CutValue, CutValueSum](length),
-		TimeDependence: buffer.NewBuffer[SwingValue, SwingValueSum](length),
-		PreSwing:       buffer.NewBuffer[SwingValue, SwingValueSum](length),
-		PostSwing:      buffer.NewBuffer[SwingValue, SwingValueSum](length),
-		Grid:           buffer.NewBufferSlice[CutValue, CutValueSum](GridBufferSize, length),
+		AccCut:                           buffer.NewBuffer[CutValue, CutValueSum](length),
+		BeforeCut:                        buffer.NewBuffer[CutValue, CutValueSum](length),
+		AfterCut:                         buffer.NewBuffer[CutValue, CutValueSum](length),
+		Score:                            buffer.NewBuffer[CutValue, CutValueSum](length),
+		TimeDependence:                   buffer.NewBuffer[SwingValue, SwingValueSum](length),
+		PreSwing:                         buffer.NewBuffer[SwingValue, SwingValueSum](length),
+		PostSwing:                        buffer.NewBuffer[SwingValue, SwingValueSum](length),
+		BlockPositionGrid:                buffer.NewBufferSlice[CutValue, CutValueSum](BlockPositionsCount, length),
+		CutDirectionGrid:                 buffer.NewBufferSlice[CutValue, CutValueSum](CutDirectionsCount, length),
+		BlockPositionAndCutDirectionGrid: buffer.NewBufferSlice[CutValue, CutValueSum](PositionsAndDirectionsCount, length),
 	}
 }
 

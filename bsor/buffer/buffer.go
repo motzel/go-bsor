@@ -19,6 +19,7 @@ type StatsSlice[T constraints.NumericValue] struct {
 	Avg    []float64 `json:"avg"`
 	Median []T       `json:"med"`
 	Max    []T       `json:"max"`
+	Count  []int     `json:"count"`
 }
 
 type Buffer[T constraints.NumericValue, S constraints.Sum] struct {
