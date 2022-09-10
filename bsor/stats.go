@@ -5,8 +5,70 @@ import (
 	"github.com/motzel/go-bsor/bsor/utils"
 )
 
+const LayersCount = LayerValue(3)
+const LinesCount = LineValue(4)
+
 const BlockMaxValue = 115
-const GridBufferSize = 4 * 3 // lines * layers
+const GridBufferSize = int(LinesCount) * int(LayersCount)
+
+type BlockPosition byte
+
+const (
+	TopLeftBlockPosition BlockPosition = iota
+	TopCenterLeftBlockPosition
+	TopCenterRightBlockPosition
+	TopRightBlockPosition
+	MiddleLeftBlockPosition
+	MiddleCenterLeftBlockPosition
+	MiddleCenterRightBlockPosition
+	MiddleRightBlockPosition
+	BottomLeftBlockPosition
+	BottomCenterLeftBlockPosition
+	BottomCenterRightBlockPosition
+	BottomRightBlockPosition
+)
+
+func (s BlockPosition) String() string {
+	switch s {
+	case TopLeftBlockPosition:
+		return "TopLeft"
+	case TopCenterLeftBlockPosition:
+		return "TopCenterLeft"
+	case TopCenterRightBlockPosition:
+		return "TopCenterRight"
+	case TopRightBlockPosition:
+		return "TopRight"
+	case MiddleLeftBlockPosition:
+		return "MiddleLeft"
+	case MiddleCenterLeftBlockPosition:
+		return "MiddleCenterLeft"
+	case MiddleCenterRightBlockPosition:
+		return "MiddleCenterRight"
+	case MiddleRightBlockPosition:
+		return "MiddleRight"
+	case BottomLeftBlockPosition:
+		return "BottomLeft"
+	case BottomCenterLeftBlockPosition:
+		return "BottomCenterLeft"
+	case BottomCenterRightBlockPosition:
+		return "BottomCenterRight"
+	case BottomRightBlockPosition:
+		return "BottomRight"
+	default:
+		return "Unknown"
+	}
+}
+
+func NewBlockPosition(layer LayerValue, line LineValue) BlockPosition {
+	// layers in BS goes from the bottom to the top, let's reverse it
+	index := (LayersCount-1-layer)*LinesCount + line
+
+	if index < 0 || index > (LayersCount*LinesCount-1) {
+		index = 0
+	}
+
+	return BlockPosition(index)
+}
 
 type CutBuffer = buffer.Buffer[CutValue, CutValueSum]
 type SwingBuffer = buffer.Buffer[SwingValue, SwingValueSum]
@@ -84,10 +146,7 @@ func (buf *StatBuffer) add(goodNoteCut *GoodNoteCutEvent) {
 		}
 
 		if goodNoteCut.ScoringType != BurstSliderHead && goodNoteCut.ScoringType != BurstSliderElement {
-			index := (2-goodNoteCut.LineLayer)*4 + goodNoteCut.LineIdx
-			if index < 0 || index > 11 {
-				index = 0
-			}
+			index := NewBlockPosition(goodNoteCut.LineLayer, goodNoteCut.LineIdx)
 			buf.Grid[index].Add(score)
 		}
 	}

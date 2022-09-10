@@ -67,8 +67,8 @@ type GameEvent struct {
 	EventIdx     Counter         `json:"-"`
 	EventType    NoteEventType   `json:"eventType"`
 	ScoringType  NoteScoringType `json:"scoringType"`
-	LineIdx      byte            `json:"lineIdx"`
-	LineLayer    byte            `json:"lineLayer"`
+	LineIdx      LineValue       `json:"lineIdx"`
+	LineLayer    LayerValue      `json:"lineLayer"`
 	ColorType    ColorType       `json:"colorType"`
 	CutDirection CutDirection    `json:"cutDirection"`
 	EventTime    TimeValue       `json:"eventTime"`

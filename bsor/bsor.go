@@ -10,35 +10,39 @@ import (
 	"strings"
 )
 
+type LineValue = byte
+type LayerValue = byte
+type TimeValue = float32
+
 type Header struct {
 	Magic   int32 `json:"-"`
 	Version byte  `json:"version"`
 }
 
 type Info struct {
-	ModVersion     string   `json:"modVersion"`
-	GameVersion    string   `json:"gameVersion"`
-	Timestamp      uint32   `json:"timestamp"`
-	PlayerId       string   `json:"playerId"`
-	PlayerName     string   `json:"playerName"`
-	Platform       string   `json:"platform"`
-	TrackingSystem string   `json:"trackingSystem"`
-	Hmd            string   `json:"hmd"`
-	Controller     string   `json:"controller"`
-	Hash           string   `json:"hash"`
-	SongName       string   `json:"songName"`
-	Mapper         string   `json:"mapper"`
-	Difficulty     string   `json:"difficulty"`
-	Score          int32    `json:"score"`
-	Mode           string   `json:"mode"`
-	Environment    string   `json:"environment"`
-	Modifiers      []string `json:"modifiers"`
-	JumpDistance   float32  `json:"jumpDistance"`
-	LeftHanded     bool     `json:"leftHanded"`
-	Height         float32  `json:"height"`
-	StartTime      float32  `json:"startTime"`
-	FailTime       float32  `json:"failTime"`
-	Speed          float32  `json:"speed"`
+	ModVersion     string    `json:"modVersion"`
+	GameVersion    string    `json:"gameVersion"`
+	Timestamp      uint32    `json:"timestamp"`
+	PlayerId       string    `json:"playerId"`
+	PlayerName     string    `json:"playerName"`
+	Platform       string    `json:"platform"`
+	TrackingSystem string    `json:"trackingSystem"`
+	Hmd            string    `json:"hmd"`
+	Controller     string    `json:"controller"`
+	Hash           string    `json:"hash"`
+	SongName       string    `json:"songName"`
+	Mapper         string    `json:"mapper"`
+	Difficulty     string    `json:"difficulty"`
+	Score          int32     `json:"score"`
+	Mode           string    `json:"mode"`
+	Environment    string    `json:"environment"`
+	Modifiers      []string  `json:"modifiers"`
+	JumpDistance   float32   `json:"jumpDistance"`
+	LeftHanded     bool      `json:"leftHanded"`
+	Height         float32   `json:"height"`
+	StartTime      TimeValue `json:"startTime"`
+	FailTime       TimeValue `json:"failTime"`
+	Speed          float32   `json:"speed"`
 }
 
 type Vector3 struct {
@@ -90,7 +94,7 @@ func (s PartType) String() string {
 }
 
 type Frame struct {
-	Time      float32             `json:"time"`
+	Time      TimeValue           `json:"time"`
 	Fps       int32               `json:"fps"`
 	Head      PositionAndRotation `json:"head"`
 	LeftHand  PositionAndRotation `json:"leftHand"`
@@ -237,33 +241,33 @@ func (s CutDirection) String() string {
 
 type Note struct {
 	ScoringType  NoteScoringType `json:"scoringType"`
-	LineIdx      byte            `json:"lineIdx"`
-	LineLayer    byte            `json:"lineLayer"`
+	LineIdx      LineValue       `json:"lineIdx"`
+	LineLayer    LayerValue      `json:"lineLayer"`
 	ColorType    ColorType       `json:"colorType"`
 	CutDirection CutDirection    `json:"cutDirection"`
-	EventTime    float32         `json:"eventTime"`
-	SpawnTime    float32         `json:"spawnTime"`
+	EventTime    TimeValue       `json:"eventTime"`
+	SpawnTime    TimeValue       `json:"spawnTime"`
 	EventType    NoteEventType   `json:"eventType"`
 	CutInfo      NoteCutInfo     `json:"cutInfo"`
 }
 
 type WallHit struct {
-	LineIdx      byte    `json:"lineIdx"`
-	ObstacleType byte    `json:"obstacleType"`
-	Width        byte    `json:"width"`
-	Energy       float32 `json:"energy"`
-	Time         float32 `json:"time"`
-	SpawnTime    float32 `json:"spawnTime"`
+	LineIdx      LineValue `json:"lineIdx"`
+	ObstacleType byte      `json:"obstacleType"`
+	Width        byte      `json:"width"`
+	Energy       float32   `json:"energy"`
+	Time         TimeValue `json:"time"`
+	SpawnTime    TimeValue `json:"spawnTime"`
 }
 
 type AutomaticHeight struct {
-	Height float32 `json:"height"`
-	Time   float32 `json:"time"`
+	Height float32   `json:"height"`
+	Time   TimeValue `json:"time"`
 }
 
 type Pause struct {
-	Duration int64   `json:"duration"`
-	Time     float32 `json:"time"`
+	Duration int64     `json:"duration"`
+	Time     TimeValue `json:"time"`
 }
 
 type Replay struct {
@@ -513,11 +517,11 @@ func readNotes(reader io.Reader, notes *[]Note) (err error) {
 
 		(*notes)[i].ScoringType = NoteScoringType(noteId / 10000)
 		noteId = noteId % 10000
-		(*notes)[i].LineIdx = byte(noteId / 1000)
+		(*notes)[i].LineIdx = LineValue(noteId / 1000)
 		noteId = noteId % 1000
-		(*notes)[i].LineLayer = byte(noteId / 100)
+		(*notes)[i].LineLayer = LayerValue(noteId / 100)
 		noteId = noteId % 100
-		(*notes)[i].ColorType = ColorType(byte(noteId / 10))
+		(*notes)[i].ColorType = ColorType(noteId / 10)
 		noteId = noteId % 10
 		(*notes)[i].CutDirection = CutDirection(noteId)
 
@@ -552,7 +556,7 @@ func readWalls(reader io.Reader, walls *[]WallHit) (err error) {
 		if wallId, err = readInt32(reader); err != nil {
 			return
 		}
-		(*walls)[i].LineIdx = byte(wallId / 100)
+		(*walls)[i].LineIdx = LineValue(wallId / 100)
 		wallId = wallId % 100
 		(*walls)[i].ObstacleType = byte(wallId / 10)
 		wallId = wallId % 10
