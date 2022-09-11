@@ -405,7 +405,7 @@ func readInfo(reader io.Reader, info *Info) (err error) {
 		return err
 	}
 
-	if info.PlayerName, err = readString(reader); err != nil {
+	if info.PlayerName, err = readPotentiallyInvalidString(reader); err != nil {
 		return err
 	}
 
@@ -429,11 +429,11 @@ func readInfo(reader io.Reader, info *Info) (err error) {
 		return err
 	}
 
-	if info.SongName, err = readString(reader); err != nil {
+	if info.SongName, err = readPotentiallyInvalidString(reader); err != nil {
 		return err
 	}
 
-	if info.Mapper, err = readString(reader); err != nil {
+	if info.Mapper, err = readPotentiallyInvalidString(reader); err != nil {
 		return err
 	}
 
@@ -599,9 +599,9 @@ func readStringWithLength(reader io.Reader, length int) (str string, err error) 
 	return string(stringBytes), nil
 }
 
-func skipResidualsOfIncorrectPreviousStringLength(reader io.Reader, size int32) (int32, error) {
+func skipResidualsOfIncorrectPreviousStringLength(reader io.Reader, length int) (int, error) {
 	bytes := make([]byte, 4)
-	byteOrder.PutUint32(bytes[0:], uint32(size))
+	byteOrder.PutUint32(bytes[0:], uint32(length))
 
 	var b uint8
 	if err := binary.Read(reader, binary.LittleEndian, &b); err != nil {
@@ -611,27 +611,81 @@ func skipResidualsOfIncorrectPreviousStringLength(reader io.Reader, size int32) 
 	bytes = bytes[1:]
 	bytes = append(bytes, b)
 
-	size = int32(byteOrder.Uint32(bytes))
-	if size > 1000 || size < 0 {
-		return skipResidualsOfIncorrectPreviousStringLength(reader, size)
+	length = int(byteOrder.Uint32(bytes))
+	if length > 255 || length < 0 {
+		return skipResidualsOfIncorrectPreviousStringLength(reader, length)
 	}
 
-	return size, nil
+	return length, nil
 }
 
-func readString(reader io.Reader) (str string, err error) {
-	var size int32
-	if size, err = readInt32(reader); err != nil {
-		return "", err
-	}
-
-	if size > 1000 || size < 0 {
-		if size, err = skipResidualsOfIncorrectPreviousStringLength(reader, size); err != nil {
+func readPotentiallyInvalidStringWithLength(reader io.Reader, length int) (str string, err error) {
+	if length > 255 || length < 0 {
+		if length, err = skipResidualsOfIncorrectPreviousStringLength(reader, length); err != nil {
 			return "", err
 		}
 	}
 
-	return readStringWithLength(reader, int(size))
+	return readStringWithLength(reader, length)
+}
+
+func readPotentiallyInvalidString(reader io.Reader) (str string, err error) {
+	var length int32
+	if length, err = readInt32(reader); err != nil {
+		return "", err
+	}
+
+	readSeeker, implementsSeeker := interface{}(reader).(io.Seeker)
+
+	if implementsSeeker && length > 0 {
+		originalOffset, err := readSeeker.Seek(0, io.SeekCurrent)
+		if err != nil {
+			return readPotentiallyInvalidStringWithLength(reader, int(length))
+		}
+
+		if _, err = readSeeker.Seek(int64(length), io.SeekCurrent); err != nil {
+			return readPotentiallyInvalidStringWithLength(reader, int(length))
+		}
+
+		var nextPossibleLength int32
+
+		if nextPossibleLength, err = readInt32(reader); err != nil {
+			readSeeker.Seek(originalOffset, io.SeekStart)
+
+			return readPotentiallyInvalidStringWithLength(reader, int(length))
+		}
+
+		for nextPossibleLength < 0 || nextPossibleLength > 255 {
+			if _, err = readSeeker.Seek(-3, io.SeekCurrent); err != nil {
+				readSeeker.Seek(originalOffset, io.SeekStart)
+
+				return readPotentiallyInvalidStringWithLength(reader, int(length))
+			}
+
+			length++
+
+			if nextPossibleLength, err = readInt32(reader); err != nil {
+				readSeeker.Seek(originalOffset, io.SeekStart)
+
+				return readPotentiallyInvalidStringWithLength(reader, int(length))
+			}
+		}
+
+		readSeeker.Seek(int64(-length)-int64(binary.Size(nextPossibleLength)), io.SeekCurrent)
+
+		return readStringWithLength(reader, int(length))
+	}
+
+	return readPotentiallyInvalidStringWithLength(reader, int(length))
+}
+
+func readString(reader io.Reader) (str string, err error) {
+	var length int32
+	if length, err = readInt32(reader); err != nil {
+		return "", err
+	}
+
+	return readStringWithLength(reader, int(length))
 }
 
 func readBytes(reader io.Reader, number int) (data []byte, err error) {
