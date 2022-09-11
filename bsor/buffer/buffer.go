@@ -133,6 +133,23 @@ func (buffer *CircularBuffer[T, S]) Avg() float64 {
 	}
 }
 
+func (buffer *CircularBuffer[T, S]) Median() T {
+	currentValues := buffer.GetCurrentValues()
+
+	length := len(currentValues)
+	if length == 0 {
+		return T(0)
+	}
+
+	sortSlice(currentValues)
+
+	if length%2 == 0 {
+		return (currentValues[length/2-1] + currentValues[length/2]) / 2
+	} else {
+		return currentValues[length/2]
+	}
+}
+
 func (buffer *CircularBuffer[T, S]) AvgAllTime() float64 {
 	if buffer.size > 0 {
 		return float64(buffer.sum) / float64(buffer.size)
@@ -155,20 +172,27 @@ func (buffer *CircularBuffer[T, S]) SumAllTime() S {
 	return buffer.sum
 }
 
-func (buffer *CircularBuffer[T, S]) sumAndCount() (S, int) {
+func (buffer *CircularBuffer[T, S]) GetCurrentValues() []T {
 	if buffer.size > 0 {
 		length := buffer.Length()
 		count := int(math.Min(float64(length), float64(buffer.size)))
 
-		sum := S(0)
-		for i := 0; i < count; i++ {
-			sum += S(buffer.values[i])
-		}
-
-		return sum, count
+		// duplicate buffer values up to count
+		return append([]T(nil), buffer.values[:count]...)
 	} else {
-		return 0, 0
+		return []T{}
 	}
+}
+
+func (buffer *CircularBuffer[T, S]) sumAndCount() (S, int) {
+	currentValues := buffer.GetCurrentValues()
+
+	sum := S(0)
+	for i := range currentValues {
+		sum += S(currentValues[i])
+	}
+
+	return sum, len(currentValues)
 }
 
 func NewCircularBuffer[T constraints.NumericValue, S constraints.Sum](length int) CircularBuffer[T, S] {

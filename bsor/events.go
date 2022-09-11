@@ -6,7 +6,7 @@ import (
 	"sort"
 )
 
-const fcBufferSize = 5
+const fcBufferSize = 10
 
 type NoteRating struct {
 	CutDistanceToCenter SwingValue `json:"cutDistanceToCenter"`
@@ -291,9 +291,9 @@ func calculateStats(events *ReplayEvents, gameEvents []GameEventI) {
 
 				fcScore += gameEventScore * Score(maxMultiplier.Value())
 			} else if isLeft && leftFcBuffer.Size() > 0 {
-				fcScore += Score(math.Round(leftFcBuffer.Avg())) * Score(maxMultiplier.Value())
+				fcScore += Score(leftFcBuffer.Median()) * Score(maxMultiplier.Value())
 			} else if !isLeft && rightFcBuffer.Size() > 0 {
-				fcScore += Score(math.Round(rightFcBuffer.Avg())) * Score(maxMultiplier.Value())
+				fcScore += Score(rightFcBuffer.Median()) * Score(maxMultiplier.Value())
 			} else {
 				fcScore += BlockMaxValue * Score(maxMultiplier.Value())
 			}
