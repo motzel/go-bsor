@@ -279,7 +279,7 @@ func calculateStats(events *ReplayEvents, gameEvents []GameEventI) {
 		score += gameEventScore * Score(multiplier.Value())
 		maxScore += Score(gameEvent.GetMaxScore()) * Score(maxMultiplier.Value())
 
-		isLeft := (events.Info.LeftHanded && gameEvent.GetColor() == Blue) || (!events.Info.LeftHanded && gameEvent.GetColor() == Red)
+		isLeft := gameEvent.GetColor() == Red
 
 		if gameEvent.IsNote() {
 			if gameEventScore > 0 {

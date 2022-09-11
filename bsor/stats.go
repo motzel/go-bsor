@@ -227,7 +227,7 @@ func NewReplayStats(replay *ReplayEvents) *ReplayStats {
 	totalBuf := newStatBuffer(len(replay.Hits))
 
 	for i := range replay.Hits {
-		isLeft := (replay.Info.LeftHanded && replay.Hits[i].ColorType == Blue) || (!replay.Info.LeftHanded && replay.Hits[i].ColorType == Red)
+		isLeft := replay.Hits[i].ColorType == Red
 		isEligibleNoteEvent := replay.Hits[i].ScoringType == Normal || replay.Hits[i].ScoringType == NormalOld || replay.Hits[i].ScoringType == SliderHead || replay.Hits[i].ScoringType == BurstSliderHead
 
 		if isLeft {
@@ -252,7 +252,7 @@ func NewReplayStats(replay *ReplayEvents) *ReplayStats {
 	}
 
 	for i := range replay.Misses {
-		isLeft := (replay.Info.LeftHanded && replay.Misses[i].ColorType == Blue) || (!replay.Info.LeftHanded && replay.Misses[i].ColorType == Red)
+		isLeft := replay.Misses[i].ColorType == Red
 		isEligibleNoteEvent := replay.Misses[i].ScoringType == Normal || replay.Misses[i].ScoringType == NormalOld || replay.Misses[i].ScoringType == SliderHead || replay.Misses[i].ScoringType == BurstSliderHead
 
 		if isLeft {
@@ -277,7 +277,7 @@ func NewReplayStats(replay *ReplayEvents) *ReplayStats {
 	}
 
 	for i := range replay.BadCuts {
-		isLeft := (replay.Info.LeftHanded && replay.BadCuts[i].ColorType == Blue) || (!replay.Info.LeftHanded && replay.BadCuts[i].ColorType == Red)
+		isLeft := replay.BadCuts[i].ColorType == Red
 
 		isEligibleNoteEvent := replay.BadCuts[i].ScoringType == Normal || replay.BadCuts[i].ScoringType == NormalOld || replay.BadCuts[i].ScoringType == SliderHead || replay.BadCuts[i].ScoringType == BurstSliderHead
 
@@ -303,7 +303,7 @@ func NewReplayStats(replay *ReplayEvents) *ReplayStats {
 	}
 
 	for i := range replay.BombHits {
-		isLeft := (replay.Info.LeftHanded && replay.BombHits[i].ColorType == Blue) || (!replay.Info.LeftHanded && replay.BombHits[i].ColorType == Red)
+		isLeft := replay.BombHits[i].ColorType == Red
 
 		if isLeft {
 			leftBuf.BombHits++
