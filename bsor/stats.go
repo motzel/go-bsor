@@ -80,7 +80,7 @@ type ReplayStatsInfo struct {
 	EndTime    TimeValue  `json:"endTime"`
 	Accuracy   SwingValue `json:"accuracy"`
 	FcAccuracy SwingValue `json:"fcAccuracy"`
-	CalcScore  Counter    `json:"calcScore"`
+	CalcScore  Score      `json:"calcScore"`
 	WallHits   Counter    `json:"wallHits"`
 	Pauses     Counter    `json:"pauses"`
 }
@@ -93,9 +93,9 @@ type HandStat struct {
 	TimeDependence                   buffer.Stats[SwingValue]    `json:"timeDependence"`
 	PreSwing                         buffer.Stats[SwingValue]    `json:"preSwing"`
 	PostSwing                        buffer.Stats[SwingValue]    `json:"postSwing"`
-	BlockPositionGrid                buffer.StatsSlice[CutValue] `json:"blockPositionGrid"`
-	CutDirectionGrid                 buffer.StatsSlice[CutValue] `json:"cutDirectionGrid"`
-	BlockPositionAndCutDirectionGrid buffer.StatsSlice[CutValue] `json:"blockPositionAndCutDirectionGrid"`
+	BlockPositionGrid                buffer.StatsSlice[CutValue] `json:"positionGrid"`
+	CutDirectionGrid                 buffer.StatsSlice[CutValue] `json:"directionGrid"`
+	BlockPositionAndCutDirectionGrid buffer.StatsSlice[CutValue] `json:"positionAndDirectionGrid"`
 	Notes                            Counter                     `json:"notes"`
 	Misses                           Counter                     `json:"misses"`
 	BadCuts                          Counter                     `json:"badCuts"`

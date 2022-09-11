@@ -235,7 +235,7 @@ type ReplayEventsInfo struct {
 	EndTime       TimeValue  `json:"endTime"`
 	Accuracy      SwingValue `json:"accuracy"`
 	FcAccuracy    SwingValue `json:"fcAccuracy"`
-	CalcScore     Counter    `json:"calcScore"`
+	CalcScore     Score      `json:"calcScore"`
 	MaxCombo      Counter    `json:"maxCombo"`
 	MaxLeftCombo  Counter    `json:"maxLeftCombo"`
 	MaxRightCombo Counter    `json:"maxRightCombo"`
@@ -271,13 +271,13 @@ func calculateStats(events *ReplayEvents, gameEvents []GameEventI) {
 	leftFcBuffer := buffer.NewCircularBuffer[CutValue, CutValueSum](fcBufferSize)
 	rightFcBuffer := buffer.NewCircularBuffer[CutValue, CutValueSum](fcBufferSize)
 
-	var score, fcScore, maxScore Counter
+	var score, fcScore, maxScore Score
 	var maxCombo, maxLeftCombo, maxRightCombo Counter
 	var currentCombo, currentLeftCombo, currentRightCombo Counter
 	for i, gameEvent := range gameEvents {
-		gameEventScore := Counter(gameEvent.GetScore())
-		score += gameEventScore * Counter(multiplier.Value())
-		maxScore += Counter(gameEvent.GetMaxScore()) * Counter(maxMultiplier.Value())
+		gameEventScore := Score(gameEvent.GetScore())
+		score += gameEventScore * Score(multiplier.Value())
+		maxScore += Score(gameEvent.GetMaxScore()) * Score(maxMultiplier.Value())
 
 		isLeft := (events.Info.LeftHanded && gameEvent.GetColor() == Blue) || (!events.Info.LeftHanded && gameEvent.GetColor() == Red)
 
@@ -289,13 +289,13 @@ func calculateStats(events *ReplayEvents, gameEvents []GameEventI) {
 					rightFcBuffer.Add(CutValue(gameEventScore))
 				}
 
-				fcScore += gameEventScore * Counter(maxMultiplier.Value())
+				fcScore += gameEventScore * Score(maxMultiplier.Value())
 			} else if isLeft && leftFcBuffer.Size() > 0 {
-				fcScore += Counter(math.Round(leftFcBuffer.Avg())) * Counter(maxMultiplier.Value())
+				fcScore += Score(math.Round(leftFcBuffer.Avg())) * Score(maxMultiplier.Value())
 			} else if !isLeft && rightFcBuffer.Size() > 0 {
-				fcScore += Counter(math.Round(rightFcBuffer.Avg())) * Counter(maxMultiplier.Value())
+				fcScore += Score(math.Round(rightFcBuffer.Avg())) * Score(maxMultiplier.Value())
 			} else {
-				fcScore += BlockMaxValue * Counter(maxMultiplier.Value())
+				fcScore += BlockMaxValue * Score(maxMultiplier.Value())
 			}
 		}
 

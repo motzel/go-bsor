@@ -10,52 +10,58 @@ import (
 	"strings"
 )
 
+type ReplayFloat = float32
+type ReplayInt = int32
+
+type Version = byte
 type LineValue = byte
 type LayerValue = byte
 type TimeValue = float32
+type Modifier = string
+type Score = ReplayInt
 
 type Header struct {
-	Magic   int32 `json:"-"`
-	Version byte  `json:"version"`
+	Magic   ReplayInt `json:"-"`
+	Version Version   `json:"version"`
 }
 
 type Info struct {
-	ModVersion     string    `json:"modVersion"`
-	GameVersion    string    `json:"gameVersion"`
-	Timestamp      uint32    `json:"timestamp"`
-	PlayerId       string    `json:"playerId"`
-	PlayerName     string    `json:"playerName"`
-	Platform       string    `json:"platform"`
-	TrackingSystem string    `json:"trackingSystem"`
-	Hmd            string    `json:"hmd"`
-	Controller     string    `json:"controller"`
-	Hash           string    `json:"hash"`
-	SongName       string    `json:"songName"`
-	Mapper         string    `json:"mapper"`
-	Difficulty     string    `json:"difficulty"`
-	Score          int32     `json:"score"`
-	Mode           string    `json:"mode"`
-	Environment    string    `json:"environment"`
-	Modifiers      []string  `json:"modifiers"`
-	JumpDistance   float32   `json:"jumpDistance"`
-	LeftHanded     bool      `json:"leftHanded"`
-	Height         float32   `json:"height"`
-	StartTime      TimeValue `json:"startTime"`
-	FailTime       TimeValue `json:"failTime"`
-	Speed          float32   `json:"speed"`
+	ModVersion     string      `json:"modVersion"`
+	GameVersion    string      `json:"gameVersion"`
+	Timestamp      uint32      `json:"timestamp"`
+	PlayerId       string      `json:"playerId"`
+	PlayerName     string      `json:"playerName"`
+	Platform       string      `json:"platform"`
+	TrackingSystem string      `json:"trackingSystem"`
+	Hmd            string      `json:"hmd"`
+	Controller     string      `json:"controller"`
+	Hash           string      `json:"hash"`
+	SongName       string      `json:"songName"`
+	Mapper         string      `json:"mapper"`
+	Difficulty     string      `json:"difficulty"`
+	Score          Score       `json:"score"`
+	Mode           string      `json:"mode"`
+	Environment    string      `json:"environment"`
+	Modifiers      []Modifier  `json:"modifiers"`
+	JumpDistance   ReplayFloat `json:"jumpDistance"`
+	LeftHanded     bool        `json:"leftHanded"`
+	Height         ReplayFloat `json:"height"`
+	StartTime      TimeValue   `json:"startTime"`
+	FailTime       TimeValue   `json:"failTime"`
+	Speed          ReplayFloat `json:"speed"`
 }
 
 type Vector3 struct {
-	X float32 `json:"x"`
-	Y float32 `json:"y"`
-	Z float32 `json:"z"`
+	X ReplayFloat `json:"x"`
+	Y ReplayFloat `json:"y"`
+	Z ReplayFloat `json:"z"`
 }
 
 type Position Vector3
 
 type Rotation struct {
 	Vector3
-	W float32 `json:"w"`
+	W ReplayFloat `json:"w"`
 }
 
 type PositionAndRotation struct {
@@ -63,7 +69,7 @@ type PositionAndRotation struct {
 	Rotation Rotation `json:"rotation"`
 }
 
-type PartType int32
+type PartType ReplayInt
 
 const (
 	InfoPart PartType = iota
@@ -95,13 +101,13 @@ func (s PartType) String() string {
 
 type Frame struct {
 	Time      TimeValue           `json:"time"`
-	Fps       int32               `json:"fps"`
+	Fps       ReplayInt           `json:"fps"`
 	Head      PositionAndRotation `json:"head"`
 	LeftHand  PositionAndRotation `json:"leftHand"`
 	RightHand PositionAndRotation `json:"rightHand"`
 }
 
-type NoteEventType int32
+type NoteEventType ReplayInt
 
 const (
 	Good NoteEventType = iota
@@ -126,21 +132,21 @@ func (s NoteEventType) String() string {
 }
 
 type NoteCutInfo struct {
-	SpeedOk             bool    `json:"speedOk"`
-	DirectionOk         bool    `json:"directionOk"`
-	SaberTypeOk         bool    `json:"saberTypeOk"`
-	WasCutTooSoon       bool    `json:"wasCutTooSoon"`
-	SaberSpeed          float32 `json:"saberSpeed"`
-	SaberDir            Vector3 `json:"saberDir"`
-	SaberType           int32   `json:"saberType"`
-	TimeDeviation       float32 `json:"timeDeviation"`
-	CutDirDeviation     float32 `json:"cutDirDeviation"`
-	CutPoint            Vector3 `json:"cutPoint"`
-	CutNormal           Vector3 `json:"cutNormal"`
-	CutDistanceToCenter float32 `json:"cutDistanceToCenter"`
-	CutAngle            float32 `json:"cutAngle"`
-	BeforeCutRating     float32 `json:"beforeCutRating"`
-	AfterCutRating      float32 `json:"afterCutRating"`
+	SpeedOk             bool        `json:"speedOk"`
+	DirectionOk         bool        `json:"directionOk"`
+	SaberTypeOk         bool        `json:"saberTypeOk"`
+	WasCutTooSoon       bool        `json:"wasCutTooSoon"`
+	SaberSpeed          ReplayFloat `json:"saberSpeed"`
+	SaberDir            Vector3     `json:"saberDir"`
+	SaberType           ReplayInt   `json:"saberType"`
+	TimeDeviation       ReplayFloat `json:"timeDeviation"`
+	CutDirDeviation     ReplayFloat `json:"cutDirDeviation"`
+	CutPoint            Vector3     `json:"cutPoint"`
+	CutNormal           Vector3     `json:"cutNormal"`
+	CutDistanceToCenter ReplayFloat `json:"cutDistanceToCenter"`
+	CutAngle            ReplayFloat `json:"cutAngle"`
+	BeforeCutRating     ReplayFloat `json:"beforeCutRating"`
+	AfterCutRating      ReplayFloat `json:"afterCutRating"`
 }
 
 type NoteScoringType byte
@@ -252,17 +258,17 @@ type Note struct {
 }
 
 type WallHit struct {
-	LineIdx      LineValue `json:"lineIdx"`
-	ObstacleType byte      `json:"obstacleType"`
-	Width        byte      `json:"width"`
-	Energy       float32   `json:"energy"`
-	Time         TimeValue `json:"time"`
-	SpawnTime    TimeValue `json:"spawnTime"`
+	LineIdx      LineValue   `json:"lineIdx"`
+	ObstacleType byte        `json:"obstacleType"`
+	Width        byte        `json:"width"`
+	Energy       ReplayFloat `json:"energy"`
+	Time         TimeValue   `json:"time"`
+	SpawnTime    TimeValue   `json:"spawnTime"`
 }
 
 type AutomaticHeight struct {
-	Height float32   `json:"height"`
-	Time   TimeValue `json:"time"`
+	Height ReplayFloat `json:"height"`
+	Time   TimeValue   `json:"time"`
 }
 
 type Pause struct {
@@ -461,7 +467,7 @@ func readInfo(reader io.Reader, info *Info) (err error) {
 	if len(modifiers) > 1 || len(modifiers[0]) > 0 {
 		info.Modifiers = modifiers
 	} else {
-		info.Modifiers = []string{}
+		info.Modifiers = []Modifier{}
 	}
 
 	if err = readAny(reader, &info.JumpDistance); err != nil {
@@ -492,8 +498,8 @@ func readInfo(reader io.Reader, info *Info) (err error) {
 }
 
 func readWholeSlice[T any](reader io.Reader, slice *[]T) (err error) {
-	var sliceLength int32
-	if sliceLength, err = readInt32(reader); err != nil {
+	var sliceLength ReplayInt
+	if sliceLength, err = readBsorInt(reader); err != nil {
 		return
 	}
 
@@ -503,15 +509,15 @@ func readWholeSlice[T any](reader io.Reader, slice *[]T) (err error) {
 }
 
 func readNotes(reader io.Reader, notes *[]Note) (err error) {
-	var notesCount int32
-	if notesCount, err = readInt32(reader); err != nil {
+	var notesCount ReplayInt
+	if notesCount, err = readBsorInt(reader); err != nil {
 		return
 	}
 
 	*notes = make([]Note, notesCount)
 	for i := range *notes {
-		var noteId int32
-		if noteId, err = readInt32(reader); err != nil {
+		var noteId ReplayInt
+		if noteId, err = readBsorInt(reader); err != nil {
 			return
 		}
 
@@ -545,15 +551,15 @@ func readNotes(reader io.Reader, notes *[]Note) (err error) {
 }
 
 func readWalls(reader io.Reader, walls *[]WallHit) (err error) {
-	var wallsCount int32
-	if wallsCount, err = readInt32(reader); err != nil {
+	var wallsCount ReplayInt
+	if wallsCount, err = readBsorInt(reader); err != nil {
 		return
 	}
 
 	*walls = make([]WallHit, wallsCount)
 	for i := range *walls {
-		var wallId int32
-		if wallId, err = readInt32(reader); err != nil {
+		var wallId ReplayInt
+		if wallId, err = readBsorInt(reader); err != nil {
 			return
 		}
 		(*walls)[i].LineIdx = LineValue(wallId / 100)
@@ -580,14 +586,14 @@ func readAny(reader io.Reader, out any) error {
 	return binary.Read(reader, binary.LittleEndian, out)
 }
 
-func readInt32(reader io.Reader) (value int32, err error) {
+func readBsorInt(reader io.Reader) (value ReplayInt, err error) {
 	var uintBytes = make([]byte, 4)
 
 	if uintBytes, err = readBytes(reader, 4); err != nil {
 		return 0, err
 	}
 
-	return int32(byteOrder.Uint32(uintBytes)), nil
+	return ReplayInt(byteOrder.Uint32(uintBytes)), nil
 }
 
 func readStringWithLength(reader io.Reader, length int) (str string, err error) {
@@ -630,8 +636,8 @@ func readPotentiallyInvalidStringWithLength(reader io.Reader, length int) (str s
 }
 
 func readPotentiallyInvalidString(reader io.Reader) (str string, err error) {
-	var length int32
-	if length, err = readInt32(reader); err != nil {
+	var length ReplayInt
+	if length, err = readBsorInt(reader); err != nil {
 		return "", err
 	}
 
@@ -647,9 +653,9 @@ func readPotentiallyInvalidString(reader io.Reader) (str string, err error) {
 			return readPotentiallyInvalidStringWithLength(reader, int(length))
 		}
 
-		var nextPossibleLength int32
+		var nextPossibleLength ReplayInt
 
-		if nextPossibleLength, err = readInt32(reader); err != nil {
+		if nextPossibleLength, err = readBsorInt(reader); err != nil {
 			readSeeker.Seek(originalOffset, io.SeekStart)
 
 			return readPotentiallyInvalidStringWithLength(reader, int(length))
@@ -664,7 +670,7 @@ func readPotentiallyInvalidString(reader io.Reader) (str string, err error) {
 
 			length++
 
-			if nextPossibleLength, err = readInt32(reader); err != nil {
+			if nextPossibleLength, err = readBsorInt(reader); err != nil {
 				readSeeker.Seek(originalOffset, io.SeekStart)
 
 				return readPotentiallyInvalidStringWithLength(reader, int(length))
@@ -680,8 +686,8 @@ func readPotentiallyInvalidString(reader io.Reader) (str string, err error) {
 }
 
 func readString(reader io.Reader) (str string, err error) {
-	var length int32
-	if length, err = readInt32(reader); err != nil {
+	var length ReplayInt
+	if length, err = readBsorInt(reader); err != nil {
 		return "", err
 	}
 
