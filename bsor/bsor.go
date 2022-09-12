@@ -8,6 +8,7 @@ import (
 	"math"
 	"strconv"
 	"strings"
+	"time"
 )
 
 type ReplayFloat = float32
@@ -28,7 +29,7 @@ type Header struct {
 type Info struct {
 	ModVersion     string      `json:"modVersion"`
 	GameVersion    string      `json:"gameVersion"`
-	Timestamp      uint32      `json:"timestamp"`
+	TimeSet        time.Time   `json:"timeSet"`
 	PlayerId       string      `json:"playerId"`
 	PlayerName     string      `json:"playerName"`
 	Platform       string      `json:"platform"`
@@ -405,7 +406,7 @@ func readInfo(reader io.Reader, info *Info) (err error) {
 	if err != nil {
 		return ErrDecodeField
 	}
-	info.Timestamp = uint32(timestampInt)
+	info.TimeSet = time.Unix(int64(timestampInt), 0)
 
 	if info.PlayerId, err = readString(reader); err != nil {
 		return err
