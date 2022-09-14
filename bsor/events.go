@@ -54,6 +54,7 @@ type GameEventI interface {
 	GetTime() TimeValue
 	GetColor() ColorType
 	GetScore() CutValue
+	SetPredictedScore(score CutValue)
 	GetMaxScore() CutValue
 	DecreasesCombo() bool
 	IsNote() bool
@@ -61,10 +62,11 @@ type GameEventI interface {
 	SetAccuracy(acc SwingValue)
 	GetFcAccuracy() SwingValue
 	SetFcAccuracy(acc SwingValue)
+	SetMultiplier(multiplier Counter)
 }
 
 type GameEvent struct {
-	EventIdx     Counter         `json:"-"`
+	EventIdx     Counter         `json:"idx"`
 	EventType    NoteEventType   `json:"eventType"`
 	ScoringType  NoteScoringType `json:"scoringType"`
 	LineIdx      LineValue       `json:"lineIdx"`
@@ -74,6 +76,7 @@ type GameEvent struct {
 	EventTime    TimeValue       `json:"eventTime"`
 	Accuracy     SwingValue      `json:"accuracy"`
 	FcAccuracy   SwingValue      `json:"fcAccuracy"`
+	Multiplier   Counter         `json:"multiplier"`
 	GameEventI   `json:"-"`
 }
 
@@ -128,8 +131,15 @@ func (gameEvent *GameEvent) SetFcAccuracy(acc SwingValue) {
 	gameEvent.FcAccuracy = acc
 }
 
+func (gameEvent *GameEvent) SetPredictedScore(score CutValue) {}
+
+func (gameEvent *GameEvent) SetMultiplier(multiplier Counter) {
+	gameEvent.Multiplier = multiplier
+}
+
 type GoodNoteCutEvent struct {
 	GameEvent
+	PredictedScore CutValue   `json:"predictedScore"`
 	TimeDependence SwingValue `json:"timeDependence"`
 	NoteRating
 	NoteScore
@@ -157,16 +167,26 @@ func (note *GoodNoteCutEvent) IsNote() bool {
 	return true
 }
 
+func (note *GoodNoteCutEvent) SetPredictedScore(score CutValue) {
+	note.PredictedScore = score
+}
+
 type MissedNoteEvent struct {
 	GameEvent
+	PredictedScore CutValue `json:"predictedScore"`
 }
 
 func (note *MissedNoteEvent) IsNote() bool {
 	return true
 }
 
+func (note *MissedNoteEvent) SetPredictedScore(score CutValue) {
+	note.PredictedScore = score
+}
+
 type BadCutEvent struct {
 	GameEvent
+	PredictedScore CutValue   `json:"predictedScore"`
 	TimeDependence SwingValue `json:"timeDependence"`
 }
 
@@ -174,14 +194,19 @@ func (note *BadCutEvent) IsNote() bool {
 	return true
 }
 
+func (note *BadCutEvent) SetPredictedScore(score CutValue) {
+	note.PredictedScore = score
+}
+
 type BombHitEvent struct {
 	GameEvent
 }
 
 type WallHitEvent struct {
-	EventIdx   Counter    `json:"-"`
+	EventIdx   Counter    `json:"idx"`
 	Accuracy   SwingValue `json:"accuracy"`
 	FcAccuracy SwingValue `json:"fcAccuracy"`
+	Multiplier Counter    `json:"multiplier"`
 	WallHit
 	GameEventI `json:"-"`
 }
@@ -228,6 +253,10 @@ func (wallHit *WallHitEvent) GetFcAccuracy() SwingValue {
 
 func (wallHit *WallHitEvent) SetFcAccuracy(acc SwingValue) {
 	wallHit.FcAccuracy = acc
+}
+
+func (gameEvent *WallHitEvent) SetMultiplier(multiplier Counter) {
+	gameEvent.Multiplier = multiplier
 }
 
 type ReplayEventsInfo struct {
@@ -281,7 +310,11 @@ func calculateStats(events *ReplayEvents, gameEvents []GameEventI) {
 
 		isLeft := gameEvent.GetColor() == Red
 
+		gameEvent.SetMultiplier(Counter(multiplier.Value()))
+
 		if gameEvent.IsNote() {
+			predictedScore := CutValue(0)
+
 			if gameEventScore > 0 {
 				if isLeft {
 					leftFcBuffer.Add(CutValue(gameEventScore))
@@ -290,16 +323,23 @@ func calculateStats(events *ReplayEvents, gameEvents []GameEventI) {
 				}
 
 				fcScore += gameEventScore * Score(maxMultiplier.Value())
+
+				predictedScore = CutValue(gameEventScore)
 			} else if isLeft && leftFcBuffer.Size() > 0 {
-				fcScore += Score(leftFcBuffer.Median()) * Score(maxMultiplier.Value())
+				predictedScore = leftFcBuffer.Median()
+				fcScore += Score(predictedScore * CutValue(maxMultiplier.Value()))
 			} else if !isLeft && rightFcBuffer.Size() > 0 {
-				fcScore += Score(rightFcBuffer.Median()) * Score(maxMultiplier.Value())
+				predictedScore = rightFcBuffer.Median()
+				fcScore += Score(predictedScore * CutValue(maxMultiplier.Value()))
 			} else {
-				fcScore += BlockMaxValue * Score(maxMultiplier.Value())
+				predictedScore = CutValue(BlockMaxValue)
+				fcScore += Score(predictedScore * CutValue(maxMultiplier.Value()))
 			}
+
+			gameEvent.SetPredictedScore(predictedScore)
 		}
 
-		if maxScore > 0 {
+		if maxScore != 0 {
 			gameEvents[i].SetAccuracy(SwingValue(score) / SwingValue(maxScore) * 100)
 			gameEvents[i].SetFcAccuracy(SwingValue(fcScore) / SwingValue(maxScore) * 100)
 		}
@@ -373,12 +413,30 @@ func calculateStats(events *ReplayEvents, gameEvents []GameEventI) {
 }
 
 func NewReplayEvents(replay *Replay) *ReplayEvents {
+
+	hitsCnt := 0
+	missesCnt := 0
+	badCutsCnt := 0
+	bombHitsCnt := 0
+	for i := range replay.Notes {
+		switch replay.Notes[i].EventType {
+		case Good:
+			hitsCnt++
+		case Bad:
+			badCutsCnt++
+		case Miss:
+			missesCnt++
+		case Bomb:
+			bombHitsCnt++
+		}
+	}
+
 	events := &ReplayEvents{
 		Info:     ReplayEventsInfo{Info: replay.Info, EndTime: 0},
-		Hits:     make([]GoodNoteCutEvent, 0, len(replay.Notes)),
-		Misses:   make([]MissedNoteEvent, 0),
-		BadCuts:  make([]BadCutEvent, 0),
-		BombHits: make([]BombHitEvent, 0),
+		Hits:     make([]GoodNoteCutEvent, 0, hitsCnt),
+		Misses:   make([]MissedNoteEvent, 0, missesCnt),
+		BadCuts:  make([]BadCutEvent, 0, badCutsCnt),
+		BombHits: make([]BombHitEvent, 0, bombHitsCnt),
 		Walls:    make([]WallHitEvent, 0, len(replay.Walls)),
 		Pauses:   replay.Pauses,
 	}
@@ -399,12 +457,14 @@ func NewReplayEvents(replay *Replay) *ReplayEvents {
 			ColorType:    note.ColorType,
 			CutDirection: note.CutDirection,
 			EventTime:    note.EventTime,
+			Multiplier:   1,
 		}
 
 		switch note.EventType {
 		case Good:
 			noteEvent := GoodNoteCutEvent{
 				GameEvent:      gameEvent,
+				PredictedScore: 0,
 				TimeDependence: timeDependence,
 				NoteRating:     NoteRating{BeforeCutRating: SwingValue(note.CutInfo.BeforeCutRating), AfterCutRating: SwingValue(note.CutInfo.AfterCutRating), CutDistanceToCenter: SwingValue(note.CutInfo.CutDistanceToCenter)},
 				NoteScore: getNoteScore(note.EventType, note.ScoringType, NoteRating{
@@ -415,19 +475,19 @@ func NewReplayEvents(replay *Replay) *ReplayEvents {
 			}
 
 			events.Hits = append(events.Hits, noteEvent)
-			gameEvents = append(gameEvents, &events.Hits[len(events.Hits)-1])
+			gameEvents = append(gameEvents, &(events.Hits[len(events.Hits)-1]))
 		case Bad:
-			badCut := BadCutEvent{GameEvent: gameEvent, TimeDependence: timeDependence}
+			badCut := BadCutEvent{GameEvent: gameEvent, PredictedScore: 0, TimeDependence: timeDependence}
 			events.BadCuts = append(events.BadCuts, badCut)
-			gameEvents = append(gameEvents, &events.BadCuts[len(events.BadCuts)-1])
+			gameEvents = append(gameEvents, &(events.BadCuts[len(events.BadCuts)-1]))
 		case Miss:
-			missedNote := MissedNoteEvent{GameEvent: gameEvent}
+			missedNote := MissedNoteEvent{GameEvent: gameEvent, PredictedScore: 0}
 			events.Misses = append(events.Misses, missedNote)
-			gameEvents = append(gameEvents, &events.Misses[len(events.Misses)-1])
+			gameEvents = append(gameEvents, &(events.Misses[len(events.Misses)-1]))
 		case Bomb:
 			bombHit := BombHitEvent{GameEvent: gameEvent}
 			events.BombHits = append(events.BombHits, bombHit)
-			gameEvents = append(gameEvents, &events.BombHits[len(events.BombHits)-1])
+			gameEvents = append(gameEvents, &(events.BombHits[len(events.BombHits)-1]))
 		}
 	}
 
@@ -436,7 +496,7 @@ func NewReplayEvents(replay *Replay) *ReplayEvents {
 	for i := range replay.Walls {
 		wallHitEvent := WallHitEvent{EventIdx: Counter(i) + Counter(numOfNotes), WallHit: replay.Walls[i]}
 		events.Walls = append(events.Walls, wallHitEvent)
-		gameEvents = append(gameEvents, &events.Walls[len(events.Walls)-1])
+		gameEvents = append(gameEvents, &(events.Walls[len(events.Walls)-1]))
 	}
 
 	if len(replay.Frames) > 0 {
