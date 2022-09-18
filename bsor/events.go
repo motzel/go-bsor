@@ -63,6 +63,7 @@ type GameEventI interface {
 	GetFcAccuracy() SwingValue
 	SetFcAccuracy(acc SwingValue)
 	SetMultiplier(multiplier Counter)
+	IsTheSameEvent(event GameEvent) bool
 }
 
 type GameEvent struct {
@@ -78,6 +79,17 @@ type GameEvent struct {
 	FcAccuracy   SwingValue      `json:"fcAccuracy"`
 	Multiplier   Counter         `json:"multiplier"`
 	GameEventI   `json:"-"`
+}
+
+func (gameEvent *GameEvent) IsTheSameEvent(second GameEvent) bool {
+	return gameEvent.EventType == second.EventType &&
+		gameEvent.ScoringType == second.ScoringType &&
+		gameEvent.LineIdx == second.LineIdx &&
+		gameEvent.LineLayer == second.LineLayer &&
+		gameEvent.ColorType == second.ColorType &&
+		gameEvent.CutDirection == second.CutDirection &&
+		gameEvent.EventTime == second.EventTime
+
 }
 
 func (gameEvent *GameEvent) GetIdx() Counter {
@@ -262,9 +274,10 @@ func (gameEvent *WallHitEvent) SetMultiplier(multiplier Counter) {
 type ReplayEventsInfo struct {
 	Info
 	EndTime       TimeValue  `json:"endTime"`
-	Accuracy      SwingValue `json:"accuracy"`
-	FcAccuracy    SwingValue `json:"fcAccuracy"`
 	CalcScore     Score      `json:"calcScore"`
+	Accuracy      SwingValue `json:"accuracy"`
+	CalcAccuracy  SwingValue `json:"calcAccuracy"`
+	FcAccuracy    SwingValue `json:"fcAccuracy"`
 	MaxCombo      Counter    `json:"maxCombo"`
 	MaxLeftCombo  Counter    `json:"maxLeftCombo"`
 	MaxRightCombo Counter    `json:"maxRightCombo"`
@@ -404,16 +417,16 @@ func calculateStats(events *ReplayEvents, gameEvents []GameEventI) {
 
 	if maxScore > 0 {
 		if score > 0 {
-			events.Info.Accuracy = SwingValue(score) / SwingValue(maxScore) * 100
+			events.Info.CalcAccuracy = SwingValue(score) / SwingValue(maxScore) * 100
 		} else {
-			events.Info.Accuracy = SwingValue(events.Info.Score) / SwingValue(maxScore) * 100
+			events.Info.CalcAccuracy = SwingValue(events.Info.Score) / SwingValue(maxScore) * 100
 		}
 		events.Info.FcAccuracy = SwingValue(fcScore) / SwingValue(maxScore) * 100
+		events.Info.Accuracy = SwingValue(events.Info.Score) / SwingValue(maxScore) * 100
 	}
 }
 
-func NewReplayEvents(replay *Replay) *ReplayEvents {
-
+func createReplayEvents(replay *Replay, fixReplayErrors bool) *ReplayEvents {
 	hitsCnt := 0
 	missesCnt := 0
 	badCutsCnt := 0
@@ -474,27 +487,40 @@ func NewReplayEvents(replay *Replay) *ReplayEvents {
 				}),
 			}
 
-			events.Hits = append(events.Hits, noteEvent)
-			gameEvents = append(gameEvents, &(events.Hits[len(events.Hits)-1]))
+			if !fixReplayErrors || len(events.Hits) == 0 || (fixReplayErrors && !noteEvent.IsTheSameEvent(events.Hits[len(events.Hits)-1].GameEvent)) {
+				events.Hits = append(events.Hits, noteEvent)
+				gameEvents = append(gameEvents, &(events.Hits[len(events.Hits)-1]))
+			}
+
 		case Bad:
 			badCut := BadCutEvent{GameEvent: gameEvent, PredictedScore: 0, TimeDependence: timeDependence}
-			events.BadCuts = append(events.BadCuts, badCut)
-			gameEvents = append(gameEvents, &(events.BadCuts[len(events.BadCuts)-1]))
+
+			if !fixReplayErrors || len(events.BadCuts) == 0 || (fixReplayErrors && !badCut.IsTheSameEvent(events.BadCuts[len(events.BadCuts)-1].GameEvent)) {
+				events.BadCuts = append(events.BadCuts, badCut)
+				gameEvents = append(gameEvents, &(events.BadCuts[len(events.BadCuts)-1]))
+			}
+
 		case Miss:
 			missedNote := MissedNoteEvent{GameEvent: gameEvent, PredictedScore: 0}
-			events.Misses = append(events.Misses, missedNote)
-			gameEvents = append(gameEvents, &(events.Misses[len(events.Misses)-1]))
+
+			if !fixReplayErrors || len(events.Misses) == 0 || (fixReplayErrors && !missedNote.IsTheSameEvent(events.Misses[len(events.Misses)-1].GameEvent)) {
+				events.Misses = append(events.Misses, missedNote)
+				gameEvents = append(gameEvents, &(events.Misses[len(events.Misses)-1]))
+			}
 		case Bomb:
 			bombHit := BombHitEvent{GameEvent: gameEvent}
-			events.BombHits = append(events.BombHits, bombHit)
-			gameEvents = append(gameEvents, &(events.BombHits[len(events.BombHits)-1]))
+
+			if !fixReplayErrors || len(events.BombHits) == 0 || (fixReplayErrors && !bombHit.IsTheSameEvent(events.BombHits[len(events.BombHits)-1].GameEvent)) {
+				events.BombHits = append(events.BombHits, bombHit)
+				gameEvents = append(gameEvents, &(events.BombHits[len(events.BombHits)-1]))
+			}
 		}
 	}
 
-	numOfNotes := len(replay.Notes)
+	numOfEvents := len(events.Hits) + len(events.Misses) + len(events.BadCuts) + len(events.BombHits)
 
 	for i := range replay.Walls {
-		wallHitEvent := WallHitEvent{EventIdx: Counter(i) + Counter(numOfNotes), WallHit: replay.Walls[i]}
+		wallHitEvent := WallHitEvent{EventIdx: Counter(i) + Counter(numOfEvents), WallHit: replay.Walls[i]}
 		events.Walls = append(events.Walls, wallHitEvent)
 		gameEvents = append(gameEvents, &(events.Walls[len(events.Walls)-1]))
 	}
@@ -504,6 +530,16 @@ func NewReplayEvents(replay *Replay) *ReplayEvents {
 	}
 
 	calculateStats(events, gameEvents)
+
+	return events
+}
+
+func NewReplayEvents(replay *Replay) *ReplayEvents {
+	events := createReplayEvents(replay, false)
+
+	if events.Info.Score != events.Info.CalcScore {
+		events = createReplayEvents(replay, true)
+	}
 
 	return events
 }

@@ -77,12 +77,13 @@ type SwingBuffer = buffer.Buffer[SwingValue, SwingValueSum]
 
 type ReplayStatsInfo struct {
 	Info
-	EndTime    TimeValue  `json:"endTime"`
-	Accuracy   SwingValue `json:"accuracy"`
-	FcAccuracy SwingValue `json:"fcAccuracy"`
-	CalcScore  Score      `json:"calcScore"`
-	WallHits   Counter    `json:"wallHits"`
-	Pauses     Counter    `json:"pauses"`
+	EndTime      TimeValue  `json:"endTime"`
+	CalcScore    Score      `json:"calcScore"`
+	Accuracy     SwingValue `json:"accuracy"`
+	CalcAccuracy SwingValue `json:"calcAccuracy"`
+	FcAccuracy   SwingValue `json:"fcAccuracy"`
+	WallHits     Counter    `json:"wallHits"`
+	Pauses       Counter    `json:"pauses"`
 }
 
 type HandStat struct {
@@ -209,13 +210,14 @@ func newStatBuffer(length int) *StatBuffer {
 
 func newStatInfo(info *ReplayEventsInfo) *ReplayStatsInfo {
 	return &ReplayStatsInfo{
-		Info:       info.Info,
-		EndTime:    info.EndTime,
-		Accuracy:   info.Accuracy,
-		FcAccuracy: info.FcAccuracy,
-		CalcScore:  info.CalcScore,
-		WallHits:   0,
-		Pauses:     0,
+		Info:         info.Info,
+		EndTime:      info.EndTime,
+		Accuracy:     info.Accuracy,
+		CalcAccuracy: info.CalcAccuracy,
+		FcAccuracy:   info.FcAccuracy,
+		CalcScore:    info.CalcScore,
+		WallHits:     0,
+		Pauses:       0,
 	}
 }
 
